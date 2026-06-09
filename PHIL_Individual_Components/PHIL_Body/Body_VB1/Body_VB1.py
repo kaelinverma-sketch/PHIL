@@ -435,7 +435,6 @@ with BuildPart() as cyl_body:
     extrude(amount=150, mode=Mode.SUBTRACT)
 
 # Curved cylinder: d=47mm swept along arc R=122mm, 75deg each way in XY plane at z=75
-# Same centre used for both directions — path goes from reverse-end → start → forward-end
 R_arc  = 122.0
 arc_cx = 980.64
 arc_cy = 595.0 + R_arc   # 717.0  (centre offset +R in Y, tangent at 270° = +X)
@@ -454,8 +453,8 @@ rev_mid_x = arc_cx + R_arc * math.cos(math.radians(232.5))
 rev_mid_y = arc_cy + R_arc * math.sin(math.radians(232.5))
 
 # Tangent at reverse-end (195°) pointing CCW toward start (270°)
-rev_tan_x = -math.sin(math.radians(195))   #  sin(15°) ≈  0.2588
-rev_tan_y =  math.cos(math.radians(195))   # -cos(15°) ≈ -0.9659
+rev_tan_x = -math.sin(math.radians(195))
+rev_tan_y =  math.cos(math.radians(195))
 
 # Combined path: reverse-end → start → forward-end
 with BuildLine() as arc_path:
@@ -471,7 +470,6 @@ with BuildLine() as arc_path:
     )
 
 with BuildPart() as arc_cyl_body:
-    # Profile at the reverse-end, normal = tangent direction at that point
     with BuildSketch(Plane(
         origin=(rev_end_x, rev_end_y, arc_z),
         x_dir=(0, 0, 1),
@@ -479,11 +477,9 @@ with BuildPart() as arc_cyl_body:
     )):
         Circle(47.0 / 2)
     sweep(path=arc_path)
-    # Same 45° slant cut as orange cylinder — removes the −X extension, keeps original +X arc
     with BuildSketch(slant_plane):
         Rectangle(500, 500)
     extrude(amount=-150, mode=Mode.SUBTRACT)
-    # Fillet the flat end cap face edge (smallest circle = end cap of the sweep)
     fillet(arc_cyl_body.edges().filter_by(GeomType.CIRCLE).sort_by(SortBy.LENGTH)[0:1], radius=20)
 
 with BuildPart() as joined_cyl:
@@ -508,7 +504,6 @@ with BuildPart() as joined_cyl_rotated:
 # Replicate combined cylinder at 120° and 240° around centre of 244.07mm hole
 hole_cx, hole_cy = 980.64, 595.0
 
-# Centres of each replica (original centre rotated around hole)
 _dx = cyl_cx - hole_cx   # 50.07
 _dy = cyl_cy - hole_cy   # -101.0
 c120_x = hole_cx + _dx * math.cos(math.radians(120)) - _dy * math.sin(math.radians(120))
@@ -638,13 +633,11 @@ with BuildPart() as final_body19:
     extrude(amount=55, mode=Mode.SUBTRACT)
 
 # Text emboss on front face (y=0), outward in -Y direction
-# Plane: local X = world X (text runs left→right), local Y = world +Z (text goes up)
 text_plane = Plane(origin=(50, 0, 200), x_dir=(1, 0, 0), z_dir=(0, -1, 0))
 
 with BuildPart() as final_body20:
     add(final_body19.part)
-    def spaced(txt): return " ".join(txt)
-
+    def spaced(txt): return " ".join(txt)
 
     with BuildSketch(text_plane):
         with Locations((0, 103.359375)):
@@ -659,7 +652,6 @@ with BuildPart() as final_body20:
     extrude(amount=-6, mode=Mode.SUBTRACT)
 
 # "Right" text on back face (y=790), facing outward (+Y), running along +Z axis
-# x_dir=(0,0,1): text advances in +Z; z_dir=(0,1,0): normal faces outward (+Y)
 back_text_plane = Plane(origin=(1460.96, 422.5, 750), x_dir=(0, 0, 1), z_dir=(0, 1, 0))
 
 with BuildPart() as right_text_body:
@@ -685,8 +677,12 @@ show(
     colors=["#5588AA"],
 )
 
+# ─────────────────────────────────────────────────────────────────────────────
+# STEP + STL Export — pop-up dialog to choose save location
+# ─────────────────────────────────────────────────────────────────────────────
 import tkinter as tk
 from tkinter import filedialog
+import os
 
 root = tk.Tk()
 root.withdraw()
@@ -700,7 +696,13 @@ export_path = filedialog.asksaveasfilename(
 root.destroy()
 
 if export_path:
-    export_step(final_body20.part, export_path)
-    print(f"Exported to: {export_path}")
+    # ── STEP export ──────────────────────────────────────────────────────────
+    export_step(final_body21.part, export_path)
+    print(f"STEP exported to: {export_path}")
+
+    # ── STL export — same folder, same base name ─────────────────────────────
+    stl_path = os.path.splitext(export_path)[0] + ".stl"
+    export_stl(final_body21.part, stl_path)
+    print(f"STL  exported to: {stl_path}")
 else:
     print("Export cancelled.")
