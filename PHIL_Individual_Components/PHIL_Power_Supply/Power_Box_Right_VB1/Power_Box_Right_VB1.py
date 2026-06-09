@@ -39,9 +39,6 @@ def load_face(filename, axis_a, axis_b):
 
 
 # ── 1. Back Plate ─────────────────────────────────────────────────────────────
-# Face normal (1,0,0) → YZ plane at X=0
-# Y: 0→1240, Z: 0→1980
-# Extrude -X by 47.5 (reversed) → X: -47.5→0
 print("Building Back Plate …")
 with BuildPart() as back_part:
     with BuildSketch(Plane(origin=(0,0,0), x_dir=(0,1,0), z_dir=(1,0,0))):
@@ -52,9 +49,6 @@ print(f"  bbox: {back_plate.bounding_box()}")
 
 
 # ── 2. Front Plate ───────────────────────────────────────────────────────────
-# Face normal (-1,0,0) → YZ plane at X=-1240
-# Y: 0→1240, Z: 0→780.74, 2 inner holes
-# Extrude +X by 47.5 (reversed) → X: -1240→-1192.5
 print("Building Front Plate …")
 with BuildPart() as front_part:
     with BuildSketch(Plane(origin=(-1240,0,0), x_dir=(0,1,0), z_dir=(1,0,0))):
@@ -65,9 +59,6 @@ print(f"  bbox: {front_plate.bounding_box()}")
 
 
 # ── 3. Left Plate ────────────────────────────────────────────────────────────
-# Face normal (0,-1,0) → XZ plane at Y=0
-# X: -1240→0, Z: 0→1980, 2 inner holes
-# Extrude +Y by 47.5 (reversed) → Y: 0→47.5
 print("Building Left Plate …")
 with BuildPart() as left_part:
     with BuildSketch(Plane(origin=(0,0,0), x_dir=(1,0,0), z_dir=(0,-1,0))):
@@ -78,9 +69,6 @@ print(f"  bbox: {left_plate.bounding_box()}")
 
 
 # ── 4. Right Plate ───────────────────────────────────────────────────────────
-# Face normal (0,1,0) → XZ plane at Y=1240
-# X: -1240→0, Z: 0→1980, 1 inner hole
-# Extrude -Y by 45 (reversed) → Y: 1195→1240
 print("Building Right Plate …")
 with BuildPart() as right_part:
     with BuildSketch(Plane(origin=(0,1240,0), x_dir=(1,0,0), z_dir=(0,-1,0))):
@@ -91,9 +79,6 @@ print(f"  bbox: {right_plate.bounding_box()}")
 
 
 # ── 5. Bottom Plate ──────────────────────────────────────────────────────────
-# Face normal (0,0,-1) → XY plane at Z=0
-# X: -1240→0, Y: 0→1240, 24 inner holes
-# Extrude +Z by 47.5 (reversed) → Z: 0→47.5
 print("Building Bottom Plate …")
 with BuildPart() as bottom_part:
     with BuildSketch(Plane(origin=(0,1240,0), x_dir=(1,0,0), z_dir=(0,0,-1))):
@@ -103,8 +88,7 @@ bottom_plate = bottom_part.part
 print(f"  bbox: {bottom_plate.bounding_box()}")
 
 
-# ── 6. Extruded Bodies (lofts from extrude.txt / extrude2.txt) ───────────────
-# 3 loft bodies, each tapering from face1 (X=0) to face2 (X=100)
+# ── 6. Extruded Bodies ───────────────────────────────────────────────────────
 print("Building Extruded Bodies …")
 
 def make_rect_face(x, y_min, y_max, z_min, z_max):
@@ -131,8 +115,7 @@ for i, (f1, f2) in enumerate(loft_data):
     print(f"  Body {i+1} bbox: {body.bounding_box()}")
 
 
-# ── 7. Extruded Bodies on Front side (extrude.txt / extrude2.txt) ────────────
-# 4 loft bodies, each 100mm deep in -X from X=-1240 to X=-1340
+# ── 7. Front Side Extruded Bodies ────────────────────────────────────────────
 print("Building Front Side Extruded Bodies …")
 
 front_loft_data = [
@@ -151,9 +134,7 @@ for i, (f1, f2) in enumerate(front_loft_data):
     print(f"  Body {i+1} bbox: {body.bounding_box()}")
 
 
-# ── 8. Chamfer Bodies (Outer.txt = big dia, inner.txt = small dia) ───────────
-# Two chamfer lofts: outer circle at Y=0, inner circle at Y=8.5742
-# Chamfer height = 8.5742mm, two separate bodies
+# ── 8. Chamfer Bodies ────────────────────────────────────────────────────────
 print("Building Chamfer Bodies …")
 
 import math
@@ -243,14 +224,12 @@ assembly = back_plate.fuse(
 )
 print(f"  Assembly bbox: {assembly.bounding_box()}")
 
-# Apply chamfer 1 & 2 cuts (built in section 8)
 print("Applying chamfer cuts …")
 assembly = assembly.cut(chamfer1).cut(chamfer2)
 print(f"  Assembly bbox after chamfer 1&2: {assembly.bounding_box()}")
 
 
-# ── 9. Additional Chamfer Bodies (new Outer.txt / inner.txt) ─────────────────
-# 3 chamfers: A (loft in +Y), B (loft in +X, Y~865), C (loft in +X, Y~365)
+# ── 9. Additional Chamfer Bodies ─────────────────────────────────────────────
 print("Building Additional Chamfer Bodies …")
 
 inner_x_circle = [
@@ -368,9 +347,7 @@ assembly = assembly.cut(chamfer_A).cut(chamfer_B).cut(chamfer_C)
 print(f"  Assembly bbox after chamfer A/B/C: {assembly.bounding_box()}")
 
 
-# ── 10. Chamfer Cuts — Bottom plate (Z direction, height=30mm) ───────────────
-# 4 chamfer cuts: outer (big dia) at Z=0, inner (small dia) at Z=30
-# Loft in +Z direction, applied as cuts to assembly
+# ── 10. Chamfer Cuts — Bottom plate ──────────────────────────────────────────
 print("Building & cutting Z-direction chamfers …")
 
 inner_z_all = [
@@ -411,9 +388,7 @@ for i, (oc, ic) in enumerate(z_groups, 1):
 print(f"  Assembly bbox after Z-chamfer cuts: {assembly.bounding_box()}")
 
 
-# ── 11. Cut profile (Cut.txt) — extrude cut -Z, 105mm from Z=677.5 ───────────
-# Profile: curved arc on left (X<=0) + 2 straight corners on right (X=100)
-# Face at Z=677.5, cut goes Z: 572.5→677.5 (105mm downward)
+# ── 11. Cut profile ───────────────────────────────────────────────────────────
 print("Applying Cut.txt profile cut …")
 
 cut_pts = [
@@ -423,7 +398,6 @@ cut_pts = [
     (-19.8828,615.8398,677.5),(-18.8672,607.5586,677.5),(-16.9141,599.4531,677.5),
     (-13.9844,591.6211,677.5),(-10.1562,584.2188,677.5),(-5.4688,577.3047,677.5),
 ]
-
 arc_pts = [cut_pts[0]] + list(reversed(cut_pts[4:])) + [cut_pts[3]]
 cut_edges = []
 for i in range(len(arc_pts)-1):
@@ -432,7 +406,6 @@ for i in range(len(arc_pts)-1):
 cut_edges.append(Edge.make_line(Vector(cut_pts[3][0],cut_pts[3][1],0), Vector(cut_pts[1][0],cut_pts[1][1],0)))
 cut_edges.append(Edge.make_line(Vector(cut_pts[1][0],cut_pts[1][1],0), Vector(cut_pts[2][0],cut_pts[2][1],0)))
 cut_edges.append(Edge.make_line(Vector(cut_pts[2][0],cut_pts[2][1],0), Vector(cut_pts[0][0],cut_pts[0][1],0)))
-
 cut_face = Face(Wire(cut_edges))
 cut_tool = extrude(cut_face, amount=-105).moved(Location(Vector(0, 0, 677.5)))
 print(f"  Cut tool bbox: {cut_tool.bounding_box()}")
@@ -440,7 +413,7 @@ assembly = assembly.cut(cut_tool)
 print(f"  Assembly bbox after cut: {assembly.bounding_box()}")
 
 
-# ── 12. Hexagonal Body (Cut.txt) — separate body, -Z 175.5mm from Z=965.5 ────
+# ── 12. Hexagonal Body ────────────────────────────────────────────────────────
 print("Building Hexagonal Body …")
 
 hex_pts = [
@@ -451,7 +424,6 @@ hex_edges = []
 for i in range(len(hex_pts)):
     s = hex_pts[i]; e = hex_pts[(i+1)%len(hex_pts)]
     hex_edges.append(Edge.make_line(Vector(s[0],s[1],0), Vector(e[0],e[1],0)))
-
 hex_face = Face(Wire(hex_edges))
 hex_body = extrude(hex_face, amount=175.5).moved(Location(Vector(0, 0, 965.5)))
 print(f"  bbox: {hex_body.bounding_box()}")
@@ -459,7 +431,7 @@ assembly = assembly.cut(hex_body)
 print(f"  Assembly bbox after hex cut: {assembly.bounding_box()}")
 
 
-# ── 13. Hole cut (hole.txt) — circular, 6mm in -Z from Z=790 ────────────────
+# ── 13. Hole cut ──────────────────────────────────────────────────────────────
 print("Applying hole cut …")
 
 hole_pts = [
@@ -481,7 +453,7 @@ assembly = assembly.cut(hole_tool)
 print(f"  Assembly bbox after hole cut: {assembly.bounding_box()}")
 
 
-# ── 14. Hole cut (hole.txt) — circular, 200mm in -Z from Z=494.5 ─────────────
+# ── 14. Hole cut 2 ────────────────────────────────────────────────────────────
 print("Applying hole cut 2 …")
 
 hole2_pts = [
@@ -506,7 +478,7 @@ assembly = assembly.cut(hole2_tool)
 print(f"  Assembly bbox after hole 2 cut: {assembly.bounding_box()}")
 
 
-# ── 15. Hole cut (inner.txt) — circular, 40mm in +Z from Z=670 ───────────────
+# ── 15. Hole cut 3 ────────────────────────────────────────────────────────────
 print("Applying hole cut 3 …")
 
 hole3_pts = [
@@ -530,8 +502,7 @@ assembly = assembly.cut(hole3_tool_pos).cut(hole3_tool_neg)
 print(f"  Assembly bbox after hole 3 cuts: {assembly.bounding_box()}")
 
 
-# ── 16. Chamfer cut (hole.txt=big, inner.txt=small) — Z direction, 30mm ──────
-# Big dia (hole.txt) at Z=640, small dia (inner.txt) at Z=670 => loft +Z 30mm
+# ── 16. Chamfer cut (Z direction) ─────────────────────────────────────────────
 print("Applying Z-chamfer cut (hole/inner) …")
 
 chamfer_outer_pts = [
@@ -564,7 +535,7 @@ assembly = assembly.cut(chamfer_z)
 print(f"  Assembly bbox after chamfer cut: {assembly.bounding_box()}")
 
 
-# ── 17. Hexagonal cut (Cut.txt) — 190mm in +Z from Z=1680 ───────────────────
+# ── 17. Hexagonal cut 2 ───────────────────────────────────────────────────────
 print("Applying hexagonal cut …")
 
 hex2_pts = [
@@ -579,7 +550,7 @@ assembly = assembly.cut(hex2_tool)
 print(f"  Assembly bbox after hex2 cut: {assembly.bounding_box()}")
 
 
-# ── 18. Hole cut (hole.txt) — circular, 6mm in -Z from Z=1877.5 ─────────────
+# ── 18. Hole cut 4 ────────────────────────────────────────────────────────────
 print("Applying hole cut 4 …")
 
 hole4_pts = [
@@ -601,7 +572,7 @@ assembly = assembly.cut(hole4_tool)
 print(f"  Assembly bbox after hole 4 cut: {assembly.bounding_box()}")
 
 
-# ── 19. Cut profile (Cut.txt) — 100mm in +Z from Z=1877.5 ──────────────────
+# ── 19. Cut profile 5 ────────────────────────────────────────────────────────
 print("Applying cut profile 5 …")
 
 cut5_pts = [
@@ -611,8 +582,7 @@ cut5_pts = [
     (-16.9141,640.5664,1877.5),(-13.9844,648.3789,1877.5),(-10.1562,655.8008,1877.5),
     (-5.4688,662.6953,1877.5),(0.0,669.0039,1877.5),(100.0,670.0,1877.5),(100.0,570.0,1877.5),
 ]
-# Arc: pts[0]->pts[13], then line to pt[14](100,670), line to pt[15](100,570), line back to pt[0]
-arc5 = cut5_pts[:14]  # pts[0] to pts[13]
+arc5 = cut5_pts[:14]
 cut5_edges = []
 for i in range(len(arc5)-1):
     s = arc5[i]; e = arc5[i+1]
@@ -620,7 +590,6 @@ for i in range(len(arc5)-1):
 cut5_edges.append(Edge.make_line(Vector(arc5[-1][0],arc5[-1][1],0), Vector(cut5_pts[14][0],cut5_pts[14][1],0)))
 cut5_edges.append(Edge.make_line(Vector(cut5_pts[14][0],cut5_pts[14][1],0), Vector(cut5_pts[15][0],cut5_pts[15][1],0)))
 cut5_edges.append(Edge.make_line(Vector(cut5_pts[15][0],cut5_pts[15][1],0), Vector(arc5[0][0],arc5[0][1],0)))
-
 cut5_face = Face(Wire(cut5_edges))
 cut5_tool = extrude(cut5_face, amount=-100).moved(Location(Vector(0, 0, 1877.5)))
 print(f"  Cut 5 tool bbox: {cut5_tool.bounding_box()}")
@@ -628,7 +597,7 @@ assembly = assembly.cut(cut5_tool)
 print(f"  Assembly bbox after cut 5: {assembly.bounding_box()}")
 
 
-# ── 20. Two circular extruded bodies (extrude.txt) — +Z 47.5mm from Z=780.74 ─
+# ── 20. Two circular extruded bodies ─────────────────────────────────────────
 print("Building circular extrude bodies …")
 
 ext_circ_pts = [
@@ -678,17 +647,34 @@ print(f"  Assembly bbox after fuse: {assembly.bounding_box()}")
 from ocp_vscode import show, set_defaults, Camera
 
 set_defaults(reset_camera=Camera.RESET, port=3939)
-show(
-    assembly,
-    names=["Assembly"],
-    colors=["#4A90D9"],
-)
+show(assembly, names=["Assembly"], colors=["#4A90D9"])
 
-# ── Export to STEP ───────────────────────────────────────────────────────────
-import os
-step_path = os.path.expanduser("~/Desktop/assembly.step")
-from build123d import export_step
-export_step(assembly, step_path)
-print(f"Exported STEP to: {step_path}")
+# ── STEP + STL Export — pop-up dialog ────────────────────────────────────────
+import tkinter as tk
+from tkinter import filedialog
+
+root = tk.Tk()
+root.withdraw()
+root.attributes("-topmost", True)
+
+export_path = filedialog.asksaveasfilename(
+    title="Save STEP file",
+    defaultextension=".step",
+    filetypes=[("STEP files", "*.step *.stp"), ("All files", "*.*")],
+    initialfile="assembly.step",
+)
+root.destroy()
+
+if export_path:
+    # ── STEP export ──────────────────────────────────────────────────────────
+    export_step(assembly, export_path)
+    print(f"STEP exported to: {export_path}")
+
+    # ── STL export — same folder, same base name ─────────────────────────────
+    stl_path = os.path.splitext(export_path)[0] + ".stl"
+    export_stl(assembly, stl_path)
+    print(f"STL  exported to: {stl_path}")
+else:
+    print("Export cancelled.")
 
 print("Done.")
