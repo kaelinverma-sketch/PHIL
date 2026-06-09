@@ -44,19 +44,17 @@ CUT_COORDS = [
 ]
 
 EXTRUSION_HEIGHT = 391.75
-CUT_HEIGHT       = 361.75   # pocket from Z=30 to Z=391.75, open top
+CUT_HEIGHT       = 361.75
 
 # ── Body 1: Main extruded polygon with profile cut ───────────────────────────
 with BuildPart() as part:
 
-    # 1. Outer solid
     with BuildSketch(Plane.XY):
         with BuildLine():
             Polyline(*OUTER_COORDS, close=True)
         make_face()
     extrude(amount=EXTRUSION_HEIGHT)
 
-    # 2. Cut profile — pocket starting at Z=30, open at top
     with BuildSketch(Plane.XY.offset(30)):
         with BuildLine():
             Polyline(*CUT_COORDS, close=True)
@@ -65,7 +63,6 @@ with BuildPart() as part:
 
 # ── Body 2: Separate rectangle — 1760.98 x 30, extruded 40 mm ───────────────
 with BuildPart() as rect_body:
-    # X: 99 -> 1861 (width=1762), Z: 29 -> 69 (height=40)
     with BuildSketch(Plane(origin=(99, 0, 29), z_dir=(0, 0, 1))):
         Rectangle(1762, 30, align=(Align.MIN, Align.MIN))
     extrude(amount=40)
@@ -106,28 +103,28 @@ with BuildPart() as inner_box:
         Rectangle(875, 1297.5, align=(Align.MIN, Align.MIN))
     extrude(amount=50)
 
-# ── Body 8: Large hollow cylinder L — OD=300, ID=240, h=50, at (542.97,1173.75)
+# ── Body 8: Large hollow cylinder L ──────────────────────────────────────────
 with BuildPart() as hollow_cyl:
     with BuildSketch(Plane(origin=(542.97, 1173.75, 0), z_dir=(0, 0, 1))):
         Circle(150)
         Circle(120, mode=Mode.SUBTRACT)
     extrude(amount=50)
 
-# ── Body 9: Large hollow cylinder R — mirrored at (1417.97, 1173.75) ─────────
+# ── Body 9: Large hollow cylinder R ──────────────────────────────────────────
 with BuildPart() as hollow_cyl_mirror:
     with BuildSketch(Plane(origin=(1417.97, 1173.75, 0), z_dir=(0, 0, 1))):
         Circle(150)
         Circle(120, mode=Mode.SUBTRACT)
     extrude(amount=50)
 
-# ── Body 10: Small hollow cylinder L — OD=120, ID=70, h=50, at (470.49,413.75)
+# ── Body 10: Small hollow cylinder L ─────────────────────────────────────────
 with BuildPart() as small_cyl_left:
     with BuildSketch(Plane(origin=(470.49, 413.75, 0), z_dir=(0, 0, 1))):
         Circle(60)
         Circle(35, mode=Mode.SUBTRACT)
     extrude(amount=50)
 
-# ── Body 11: Small hollow cylinder R — at (1490.49, 413.75) ──────────────────
+# ── Body 11: Small hollow cylinder R ─────────────────────────────────────────
 with BuildPart() as small_cyl_right:
     with BuildSketch(Plane(origin=(1490.49, 413.75, 0), z_dir=(0, 0, 1))):
         Circle(60)
@@ -144,7 +141,7 @@ main_solid = main_solid.fuse(small_cyl_right.part.solids()[0])
 # ── Subtract inner box from combined solid ────────────────────────────────────
 main_solid = main_solid.cut(inner_box.part.solids()[0])
 
-# ── Through hole dia=240 at (542.97, 1173.75) and mirrored at (1417.97, 1173.75) ─
+# ── Through hole dia=240 at (542.97, 1173.75) ────────────────────────────────
 with BuildPart() as hole_left:
     with BuildSketch(Plane(origin=(542.97, 1173.75, 0), z_dir=(0, 0, 1))):
         Circle(120)
@@ -160,10 +157,10 @@ with BuildPart() as hole_right:
 
 main_solid = main_solid.cut(hole_right.part.solids()[0])
 
-# ── Through holes dia=35.62 at (470.49, 413.76) and (1490.48, 413.76) ────────
+# ── Through holes dia=35.62 ───────────────────────────────────────────────────
 with BuildPart() as small_hole_left:
     with BuildSketch(Plane(origin=(470.49, 413.76, 0), z_dir=(0, 0, 1))):
-        Circle(17.81)    # radius = 35.62/2
+        Circle(17.81)
     extrude(amount=391.75)
 
 with BuildPart() as small_hole_right:
@@ -174,13 +171,12 @@ with BuildPart() as small_hole_right:
 main_solid = main_solid.cut(small_hole_left.part.solids()[0])
 main_solid = main_solid.cut(small_hole_right.part.solids()[0])
 
-# ── Chamfer cones at small hole positions: h=17.5, OD=70, ID=35.62 ──────────
-# Moved -18 in Z: small dia (35.62) at Z=14.5, big dia (70) at Z=32
+# ── Chamfer cones at small hole positions ────────────────────────────────────
 with BuildPart() as chamfer_left:
     with BuildSketch(Plane(origin=(470.49, 413.76, 14.5), z_dir=(0, 0, 1))):
-        Circle(17.81)        # small radius = 35.62/2 at bottom
+        Circle(17.81)
     with BuildSketch(Plane(origin=(470.49, 413.76, 32), z_dir=(0, 0, 1))):
-        Circle(35)           # big radius = 70/2 at top
+        Circle(35)
     loft(ruled=True)
 
 with BuildPart() as chamfer_right:
@@ -190,26 +186,24 @@ with BuildPart() as chamfer_right:
         Circle(35)
     loft(ruled=True)
 
-# ── Cut chamfer frustums from main solid ─────────────────────────────────────
 main_solid = main_solid.cut(chamfer_left.part.solids()[0])
 main_solid = main_solid.cut(chamfer_right.part.solids()[0])
 
-# ── Holes dia=70 at hole 3 (470.49,1933.76) and hole 5 (1490.5,1933.76), depth=341.75 ─
+# ── Holes dia=70 at hole 3 and 5, depth=341.75 ───────────────────────────────
 for hx, hy in [(470.49, 1933.76), (1490.5, 1933.76)]:
     with BuildPart() as hole_70:
         with BuildSketch(Plane(origin=(hx, hy, 391.75), z_dir=(0, 0, 1))):
-            Circle(35)    # radius = 70/2
+            Circle(35)
         extrude(amount=-341.75)
     main_solid = main_solid.cut(hole_70.part.solids()[0])
 
-# ── Chamfer at hole 3 and 5: big dia=70 at Z=32.5, small dia=35.62 at Z=50 ───
-# Loft from small (top Z=50) to big (bottom Z=32.5) — same -Z direction as bore
+# ── Chamfer at hole 3 and 5 ───────────────────────────────────────────────────
 for hx, hy in [(470.49, 1933.76), (1490.5, 1933.76)]:
     with BuildPart() as chamfer_top:
         with BuildSketch(Plane(origin=(hx, hy, 32.5), z_dir=(0, 0, 1))):
-            Circle(35)        # big radius = 70/2 at Z=32.5 (bottom)
+            Circle(35)
         with BuildSketch(Plane(origin=(hx, hy, 50), z_dir=(0, 0, 1))):
-            Circle(17.81)     # small radius = 35.62/2 at Z=50 (top)
+            Circle(17.81)
         loft(ruled=True)
     main_solid = main_solid.cut(chamfer_top.part.solids()[0])
 
@@ -217,8 +211,7 @@ for hx, hy in [(470.49, 1933.76), (1490.5, 1933.76)]:
 if hasattr(main_solid, 'solids'):
     main_solid = main_solid.solids()[0]
 
-# ── Final compound ────────────────────────────────────────────────────────────
-# ── New separate body: pentagon-like profile, extruded 25mm ─────────────────
+# ── Pentagon profile bodies ───────────────────────────────────────────────────
 PENTA_COORDS = [
     (0,     0),
     (65.9,  0),
@@ -237,7 +230,6 @@ with BuildPart() as penta_body:
         make_face()
     extrude(amount=-25)
 
-# ── Mirrored pentagon body ───────────────────────────────────────────────────
 PENTA_COORDS_MIRROR = [
     (1960.98, 0),
     (1895.08, 0),
@@ -256,7 +248,7 @@ with BuildPart() as penta_body_mirror:
         make_face()
     extrude(amount=-25)
 
-# ── New profile: extruded cut 25mm deep ──────────────────────────────────────
+# ── Cut profile bodies ────────────────────────────────────────────────────────
 CUT_PROFILE_COORDS = [
     (183,    1157.44),
     (263.91, 1157.44),
@@ -277,7 +269,6 @@ with BuildPart() as cut_profile_body:
 
 main_solid = main_solid.cut(cut_profile_body.part.solids()[0])
 
-# ── Mirrored cut profile ──────────────────────────────────────────────────────
 CUT_PROFILE_COORDS_MIRROR = [
     (1777.98, 1157.44),
     (1697.07, 1157.44),
@@ -298,30 +289,27 @@ with BuildPart() as cut_profile_body_mirror:
 
 main_solid = main_solid.cut(cut_profile_body_mirror.part.solids()[0])
 
-# ── Holes dia=70 at hole 3 (470.49,1933.76) and hole 5 (1490.5,1933.76), depth=341.75 ─
+# ── Holes dia=70 at hole 3 and 5, depth=341.75 (second pass) ─────────────────
 for hx, hy in [(470.49, 1933.76), (1490.5, 1933.76)]:
     with BuildPart() as hole_70:
         with BuildSketch(Plane(origin=(hx, hy, 391.75), z_dir=(0, 0, 1))):
-            Circle(35)    # radius = 70/2
+            Circle(35)
         extrude(amount=-341.75)
     main_solid = main_solid.cut(hole_70.part.solids()[0])
 
-# ── Chamfer at hole 3 and 5: big dia=70 at Z=32.5, small dia=35.62 at Z=50 ───
-# Loft from small (top Z=50) to big (bottom Z=32.5) — same -Z direction as bore
 for hx, hy in [(470.49, 1933.76), (1490.5, 1933.76)]:
     with BuildPart() as chamfer_top:
         with BuildSketch(Plane(origin=(hx, hy, 32.5), z_dir=(0, 0, 1))):
-            Circle(35)        # big radius = 70/2 at Z=32.5 (bottom)
+            Circle(35)
         with BuildSketch(Plane(origin=(hx, hy, 50), z_dir=(0, 0, 1))):
-            Circle(17.81)     # small radius = 35.62/2 at Z=50 (top)
+            Circle(17.81)
         loft(ruled=True)
     main_solid = main_solid.cut(chamfer_top.part.solids()[0])
 
-# ── Extract final solid safely ────────────────────────────────────────────────
 if hasattr(main_solid, 'solids'):
     main_solid = main_solid.solids()[0]
 
-# ── Top cut profile: extruded cut 25mm deep ─────────────────────────────────
+# ── Top cut profile ───────────────────────────────────────────────────────────
 TOP_CUT_COORDS = [
     (952.97,  1985),
     (952.97,  1917.87),
@@ -342,11 +330,10 @@ with BuildPart() as top_cut_body:
 
 main_solid = main_solid.cut(top_cut_body.part.solids()[0])
 
-# ── Cut pentagon profiles from main solid ────────────────────────────────────
 main_solid = main_solid.cut(penta_body.part.solids()[0])
 main_solid = main_solid.cut(penta_body_mirror.part.solids()[0])
 
-# ── Through holes dia=35 at 7 positions, full height 391.75 ──────────────────
+# ── Through holes dia=35 at 7 positions ──────────────────────────────────────
 HOLE_35_POSITIONS = [
     (50.1,    243.07),
     (248.04,  1184.92),
@@ -357,49 +344,39 @@ HOLE_35_POSITIONS = [
     (1910.96, 243.07),
 ]
 
-for i, (hx, hy) in enumerate(HOLE_35_POSITIONS):
+for hx, hy in HOLE_35_POSITIONS:
     with BuildPart() as hole_35:
         with BuildSketch(Plane(origin=(hx, hy, 0), z_dir=(0, 0, 1))):
-            Circle(17.5)    # radius = 35/2
+            Circle(17.5)
         extrude(amount=391.75)
     main_solid = main_solid.cut(hole_35.part.solids()[0])
 
-# ── Holes dia=70 at hole 3 (470.49,1933.76) and hole 5 (1490.5,1933.76), depth=341.75 ─
 for hx, hy in [(470.49, 1933.76), (1490.5, 1933.76)]:
     with BuildPart() as hole_70:
         with BuildSketch(Plane(origin=(hx, hy, 391.75), z_dir=(0, 0, 1))):
-            Circle(35)    # radius = 70/2
+            Circle(35)
         extrude(amount=-341.75)
     main_solid = main_solid.cut(hole_70.part.solids()[0])
 
-# ── Chamfer at hole 3 and 5: big dia=70 at Z=32.5, small dia=35.62 at Z=50 ───
-# Loft from small (top Z=50) to big (bottom Z=32.5) — same -Z direction as bore
 for hx, hy in [(470.49, 1933.76), (1490.5, 1933.76)]:
     with BuildPart() as chamfer_top:
         with BuildSketch(Plane(origin=(hx, hy, 32.5), z_dir=(0, 0, 1))):
-            Circle(35)        # big radius = 70/2 at Z=32.5 (bottom)
+            Circle(35)
         with BuildSketch(Plane(origin=(hx, hy, 50), z_dir=(0, 0, 1))):
-            Circle(17.81)     # small radius = 35.62/2 at Z=50 (top)
+            Circle(17.81)
         loft(ruled=True)
     main_solid = main_solid.cut(chamfer_top.part.solids()[0])
 
-# ── Emboss text on top face cut floor (Z=30) ─────────────────────────────────
-# Font size set so capital letter height ≈ 69.3mm
-# For most fonts cap height ≈ 0.7 * font_size → font_size = 69.3 / 0.7 ≈ 99
-# Text placed at inner pocket bottom left, left-aligned
-# Inner pocket starts at x=100, y=0 (cut profile), floor at Z=30
+# ── Emboss text ───────────────────────────────────────────────────────────────
 TEXT_LINES = [
     "ETH Zurich",
     "Cell Systems Dynamics Group",
     "Designed by Philip Dettinger",
 ]
-FONT_SIZE  = 79.2      # cap height ≈ 55.44 mm (reduced 20%)
-TEXT_DEPTH = 6         # cut depth in -Z
-TEXT_X     = 110       # left margin inside inner pocket
-TEXT_Y_START = 250     # bottom line Y position
+FONT_SIZE    = 79.2
+TEXT_DEPTH   = 6
 LINE_SPACING = FONT_SIZE * 1.2
 
-# Build each text line and cut from main solid
 text_parts = []
 for i, line in enumerate(TEXT_LINES):
     y_pos = (len(TEXT_LINES) - 1 - i) * LINE_SPACING + 141
@@ -410,13 +387,12 @@ for i, line in enumerate(TEXT_LINES):
     for s in tp.part.solids():
         text_parts.append(s)
 
-# Cut all text from main solid
 for ts in text_parts:
     main_solid = main_solid.cut(ts)
 
 text_compound = Compound([])
 
-# ── Through holes dia=35 in Y direction at (x=50, z=230) and (x=1910.96, z=211.8) ─
+# ── Through holes dia=35 in Y direction ──────────────────────────────────────
 SIDE_HOLES = [
     (50,      230),
     (1910.96, 211.8),
@@ -425,43 +401,39 @@ SIDE_HOLES = [
 for hx, hz in SIDE_HOLES:
     with BuildPart() as side_hole:
         with BuildSketch(Plane(origin=(hx, 0, hz), z_dir=(0, 1, 0))):
-            Circle(17.5)    # radius = 35/2
-        extrude(amount=1983.75)   # full Y depth of model
+            Circle(17.5)
+        extrude(amount=1983.75)
     main_solid = main_solid.cut(side_hole.part.solids()[0])
 
-# ── Holes dia=70 from y=95 to y=1800 at side hole positions ──────────────────
 for hx, hz in SIDE_HOLES:
     with BuildPart() as side_hole_70:
         with BuildSketch(Plane(origin=(hx, 95, hz), z_dir=(0, 1, 0))):
-            Circle(35)      # radius = 70/2
-        extrude(amount=1705)    # 1800 - 95 = 1705
+            Circle(35)
+        extrude(amount=1705)
     main_solid = main_solid.cut(side_hole_70.part.solids()[0])
 
-# ── Chamfer at side holes: cut, small dia=35.62 at y=77.5, big dia=70 at y=95 ─
 for hx, hz in SIDE_HOLES:
     with BuildPart() as side_chamfer:
         with BuildSketch(Plane(origin=(hx, 77.5, hz), z_dir=(0, 1, 0))):
-            Circle(17.81)     # small radius = 35.62/2 at y=77.5
+            Circle(17.81)
         with BuildSketch(Plane(origin=(hx, 95, hz), z_dir=(0, 1, 0))):
-            Circle(35)        # big radius = 70/2 at y=95
+            Circle(35)
         loft(ruled=True)
     main_solid = main_solid.cut(side_chamfer.part.solids()[0])
 
-# ── Hole dia=60 in X direction: x=141 to x=280, y=1064.62, z=262.49 ─────────
+# ── Hole dia=60 in X direction ────────────────────────────────────────────────
 with BuildPart() as x_hole:
     with BuildSketch(Plane(origin=(141, 1064.62, 262.49), z_dir=(1, 0, 0))):
-        Circle(30)      # radius = 60/2
-    extrude(amount=139)   # 280 - 141 = 139
+        Circle(30)
+    extrude(amount=139)
 main_solid = main_solid.cut(x_hole.part.solids()[0])
 
-# ── Mirrored hole dia=60 in +X direction: x=1680.98 to x=1819.98 ─────────────
 with BuildPart() as x_hole_mirror:
     with BuildSketch(Plane(origin=(1680.98, 1064.62, 262.49), z_dir=(1, 0, 0))):
-        Circle(30)      # radius = 60/2
-    extrude(amount=139)   # same depth
+        Circle(30)
+    extrude(amount=139)
 main_solid = main_solid.cut(x_hole_mirror.part.solids()[0])
 
-# ── Extract final solid safely ────────────────────────────────────────────────
 if hasattr(main_solid, 'solids'):
     main_solid = main_solid.solids()[0]
 
@@ -477,13 +449,13 @@ print("✓ Parts created successfully.")
 print(f"  Bounding box : {combined.bounding_box()}")
 print(f"  Volume       : {combined.volume:.4f} mm³")
 
-# ── Export to STEP with file dialog ──────────────────────────────────────────
+# ── STEP + STL Export — pop-up dialog ────────────────────────────────────────
 import tkinter as tk
 from tkinter import filedialog
 import os
 
 root = tk.Tk()
-root.withdraw()  # hide main window
+root.withdraw()
 root.lift()
 root.attributes('-topmost', True)
 
@@ -493,11 +465,16 @@ export_path = filedialog.asksaveasfilename(
     filetypes=[("STEP files", "*.step *.stp"), ("All files", "*.*")],
     initialfile="chamber.step",
 )
-
 root.destroy()
 
 if export_path:
+    # ── STEP export ──────────────────────────────────────────────────────────
     export_step(combined, export_path)
-    print(f"✓ STEP file exported to: {export_path}")
+    print(f"✓ STEP exported to: {export_path}")
+
+    # ── STL export — same folder, same base name ─────────────────────────────
+    stl_path = os.path.splitext(export_path)[0] + ".stl"
+    export_stl(combined, stl_path)
+    print(f"✓ STL  exported to: {stl_path}")
 else:
     print("⚠ Export cancelled — no file saved.")
