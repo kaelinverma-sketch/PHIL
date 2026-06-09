@@ -691,4 +691,10 @@ from build123d import export_step
 export_step(assembly, step_path)
 print(f"Exported STEP to: {step_path}")
 
+# ── Export to STL ────────────────────────────────────────────────────────────
+stl_path = os.path.expanduser("~/Desktop/assembly.stl")
+from build123d import export_stl
+
+export_stl(assembly, stl_path)
+print(f"Exported STL to: {stl_path}")
 print("Done.")
