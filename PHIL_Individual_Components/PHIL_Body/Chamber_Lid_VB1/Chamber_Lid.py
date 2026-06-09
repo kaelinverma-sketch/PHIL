@@ -141,7 +141,6 @@ wall_moved = wall_body.part.moved(Location((485.47, 453.75, 0)))
 
 # ---------------------------------------------------------------------------
 # Text — on the back face (Y=0 plane), extruding in -Y direction
-# Text runs along X axis, lines stack along Z axis
 # ---------------------------------------------------------------------------
 lines = [
     "ETH Zurich",
@@ -154,24 +153,18 @@ line_spacing = text_height * 1.5
 extrude_depth = 6
 text_parts = []
 
-# Text is sketched in the XY plane, center aligned, extruded in +Z
 for i, line in enumerate(lines):
     with BuildPart() as text_part:
         with BuildSketch(Plane(origin=(0,0,0), x_dir=(1,0,0), z_dir=(0,0,-1))) as ts:
             Text(line, font_size=text_height, align=(Align.MIN, Align.CENTER))
         extrude(amount=extrude_depth, dir=(0, 0, 1))
-    # Stack lines along Y
     moved = text_part.part.moved(Location((0, -i * line_spacing, 0)))
     text_parts.append(moved)
 
-# Combine all text lines into one body
 text_body = text_parts[0]
 for tp in text_parts[1:]:
     text_body = text_body.fuse(tp)
 
-# ---------------------------------------------------------------------------
-# Display all bodies in OCP CAD Viewer
-# ---------------------------------------------------------------------------
 # Move text by 400 in X and 343 in Y
 text_body = text_body.moved(Location((400, 343, 0)))
 
@@ -181,14 +174,15 @@ result = result - text_body
 show(result, wall_moved, names=["final_result", "hollow_wall"])
 
 # ---------------------------------------------------------------------------
-# Export to STEP — pop-up dialog to choose save location
+# STEP + STL Export — pop-up dialog to choose save location
 # ---------------------------------------------------------------------------
 import tkinter as tk
 from tkinter import filedialog
-from build123d import Compound, export_step
+import os
+from build123d import Compound, export_step, export_stl
 
 root = tk.Tk()
-root.withdraw()  # Hide the root window
+root.withdraw()
 root.lift()
 root.attributes("-topmost", True)
 
@@ -198,12 +192,18 @@ export_path = filedialog.asksaveasfilename(
     filetypes=[("STEP files", "*.step *.stp"), ("All files", "*.*")],
     initialfile="Chamber_Lid.step",
 )
+root.destroy()
 
 if export_path:
     all_bodies = Compound([result, wall_moved])
+
+    # ── STEP export ──────────────────────────────────────────────────────────
     export_step(all_bodies, export_path)
-    print(f"Exported STEP file to: {export_path}")
+    print(f"STEP exported to: {export_path}")
+
+    # ── STL export — same folder, same base name ─────────────────────────────
+    stl_path = os.path.splitext(export_path)[0] + ".stl"
+    export_stl(all_bodies, stl_path)
+    print(f"STL  exported to: {stl_path}")
 else:
     print("Export cancelled.")
-
-root.destroy()
