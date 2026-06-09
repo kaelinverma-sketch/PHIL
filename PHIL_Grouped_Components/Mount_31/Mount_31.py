@@ -442,13 +442,33 @@ all_bodies = [
 # --- DISPLAY ALL ---
 show(*all_bodies)
 
-# --- EXPORT TO STEP ---
+# =============================================================================
+# EXPORT
+# =============================================================================
 import os
-from build123d import export_step, Compound
+from build123d import export_step, export_stl, Compound
 
-desktop     = os.path.expanduser('~/Desktop')
-export_path = os.path.join(desktop, 'Mount_Array.step')
-
+desktop = os.path.expanduser('~/Desktop')
 assembly = Compound(children=all_bodies)
-export_step(assembly, export_path)
-print(f"Exported {NUM_COPIES + 1} instances to: {export_path}")
+
+# --- STEP (existing) ---
+export_path_step = os.path.join(desktop, 'Mount_Array.step')
+export_step(assembly, export_path_step)
+print(f"Exported STEP  → {export_path_step}")
+
+# --- STL (combined assembly) ---
+# linear_deflection  : chord-height tolerance in mm (smaller = finer mesh, larger file)
+# angular_deflection : max angle between adjacent triangles in radians
+export_path_stl = os.path.join(desktop, 'Mount_Array.stl')
+export_stl(assembly, export_path_stl, tolerance=0.1, angular_tolerance=0.1)
+print(f"Exported STL   → {export_path_stl}")
+
+# --- STL per solid (optional – uncomment to enable) ---
+# stl_dir = os.path.join(desktop, 'Mount_Array_STL_parts')
+# os.makedirs(stl_dir, exist_ok=True)
+# for i, body in enumerate(all_bodies, start=1):
+#     part_path = os.path.join(stl_dir, f'Solid_{i:02d}.stl')
+#     export_stl(body, part_path, tolerance=0.1, angular_tolerance=0.1)
+#     print(f"  Solid {i:02d} → {part_path}")
+
+print(f"Done. {len(all_bodies)} solids exported.")
