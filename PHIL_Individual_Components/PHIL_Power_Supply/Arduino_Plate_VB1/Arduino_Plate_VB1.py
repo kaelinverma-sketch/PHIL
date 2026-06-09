@@ -18,10 +18,6 @@ import os
 from build123d import *
 from ocp_vscode import show
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# RAW DATA
-# ═══════════════════════════════════════════════════════════════════════════════
-
 BASE_PTS = [
     (542044.6875, 235915.9766, 50.0),
     (543241.7578, 235915.9766, 50.0),
@@ -71,15 +67,11 @@ CUT_N      = 6
 
 PROFILE_HEIGHT = 20.0
 
-# Cone parameters
 CONE_ANGLE    = 70.0
 CONE_HEIGHT   = 20.0
-CONE_BOTTOM_R = 35.0   # wide base (dia 70) at Z=0
+CONE_BOTTOM_R = 35.0
 CONE_TOP_R    = CONE_BOTTOM_R - CONE_HEIGHT * math.tan(math.radians(CONE_ANGLE / 2.0))
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# SHARED NORMALISATION ORIGIN
-# ═══════════════════════════════════════════════════════════════════════════════
 MIN_X = min(p[0] for p in BASE_PTS)
 MIN_Y = min(p[1] for p in BASE_PTS)
 
@@ -89,9 +81,6 @@ def norm2d(pts_raw):
 print(f"Normalisation origin : ({MIN_X}, {MIN_Y})")
 print(f"Cone frustum: bottom_r={CONE_BOTTOM_R} mm  top_r={CONE_TOP_R:.4f} mm  height={CONE_HEIGHT} mm")
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# LOAD profiles.json
-# ═══════════════════════════════════════════════════════════════════════════════
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 JSON_PATH  = os.path.join(SCRIPT_DIR, "profiles.json")
 
@@ -117,10 +106,6 @@ def get_center(face_groups):
     ys = [s["start"][1] - MIN_Y for s in segs]
     return ((min(xs) + max(xs)) / 2, (min(ys) + max(ys)) / 2)
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# PRE-BUILD cone cutters OUTSIDE BuildPart (avoids auto-add into context)
-# ═══════════════════════════════════════════════════════════════════════════════
-# Only cut cones under cylinders that sit directly above a hexagon (dist < 50 mm)
 hex_centers = []
 for i in range(0, len(CUT_PTS_RAW), CUT_N):
     grp = CUT_PTS_RAW[i:i+CUT_N]
@@ -135,18 +120,13 @@ for face_key, face_groups in data.items():
     if nearest_dist > 50:
         print(f"  Skipping cone at ({cx:.2f}, {cy:.2f}) — no matching hexagon (dist={nearest_dist:.2f})")
         continue
-    # Wide base flush at Z=0, tip pointing upward
     c = Cone(height=CONE_HEIGHT, bottom_radius=CONE_BOTTOM_R, top_radius=CONE_TOP_R)
     c = c.translate(Vector(cx, cy, CONE_HEIGHT / 2))
     cone_cutters.append((cx, cy, c))
     print(f"  Cone cutter prepared at ({cx:.2f}, {cy:.2f})")
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# BUILD
-# ═══════════════════════════════════════════════════════════════════════════════
 with BuildPart() as part:
 
-    # ── 1. Base rectangle ────────────────────────────────────────────────────
     base_local = norm2d(BASE_PTS)
     with BuildSketch(Plane.XY):
         with BuildLine():
@@ -156,7 +136,6 @@ with BuildPart() as part:
     extrude(amount=BASE_HEIGHT)
     print("Base extruded.")
 
-    # ── 2. Hex cuts from bottom face (Z=0) upward 30 mm ──────────────────────
     hexagons = [
         norm2d(CUT_PTS_RAW[i : i + CUT_N])
         for i in range(0, len(CUT_PTS_RAW), CUT_N)
@@ -170,7 +149,6 @@ with BuildPart() as part:
         extrude(amount=CUT_HEIGHT, mode=Mode.SUBTRACT)
         print(f"  Hex cut {idx + 1} applied.")
 
-    # ── 3. Hollow cylinders fused onto top face (Z=50) upward 20 mm ──────────
     top_plane = Plane.XY.offset(BASE_HEIGHT)
 
     for face_idx, (face_key, face_groups) in enumerate(data.items()):
@@ -192,7 +170,6 @@ with BuildPart() as part:
         extrude(amount=PROFILE_HEIGHT, mode=Mode.ADD)
         print(f"  Cylinder {face_idx + 1} ({face_key}) fused.")
 
-# ── 4. Subtract cone cutters using direct boolean outside BuildPart ───────────
 result = part.part
 for idx, (cx, cy, cutter) in enumerate(cone_cutters):
     result = result - cutter
@@ -201,25 +178,34 @@ for idx, (cx, cy, cutter) in enumerate(cone_cutters):
 print(f"\nFinal bbox : {result.bounding_box()}")
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# EXPORT — pop-up folder picker, then save as STEP
+# STEP + STL Export — pop-up file dialog
 # ═══════════════════════════════════════════════════════════════════════════════
 import tkinter as tk
 from tkinter import filedialog
 
 root = tk.Tk()
-root.withdraw()                      # hide the empty root window
-root.attributes("-topmost", True)    # bring dialog to front
+root.withdraw()
+root.attributes("-topmost", True)
 
-export_dir = filedialog.askdirectory(
-    title="Select folder to save Arduino_Plate.step"
+export_path = filedialog.asksaveasfilename(
+    title="Save STEP file",
+    defaultextension=".step",
+    filetypes=[("STEP files", "*.step *.stp"), ("All files", "*.*")],
+    initialfile="Arduino_Plate.step",
 )
+root.destroy()
 
-if export_dir:
-    step_path = os.path.join(export_dir, "Arduino_Plate.step")
-    export_step(result, step_path)
-    print(f"\nSTEP exported to: {step_path}")
+if export_path:
+    # ── STEP export ──────────────────────────────────────────────────────────
+    export_step(result, export_path)
+    print(f"\nSTEP exported to: {export_path}")
+
+    # ── STL export — same folder, same base name ─────────────────────────────
+    stl_path = os.path.splitext(export_path)[0] + ".stl"
+    export_stl(result, stl_path)
+    print(f"STL  exported to: {stl_path}")
 else:
-    print("\nExport cancelled — no folder selected.")
+    print("\nExport cancelled — no file selected.")
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # DISPLAY
