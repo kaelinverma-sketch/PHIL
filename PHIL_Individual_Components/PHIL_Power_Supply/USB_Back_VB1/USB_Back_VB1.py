@@ -8,6 +8,7 @@ Step 4 : 20 mm fillet on all 25 mm edges running along the X axis (flange edges)
 """
 
 import math
+import os
 from build123d import *
 from ocp_vscode import show
 
@@ -49,7 +50,7 @@ cut_raw = [
     (0.0,  21.6992,  36.5028),
     (0.0,  22.1484,  38.4711),
     (0.0,  22.5,     42.4887),
-    (0.0,  22.4219,  40.4718),   # out of angular order — corrected by sort below
+    (0.0,  22.4219,  40.4718),
     (0.0,  22.5,    104.9887),
 ]
 
@@ -67,7 +68,7 @@ base_pts = [
     ( -50.0,  62.5), (  0.0,   62.5), (  0.0,  -62.5), ( -50.0,  -62.5),
 ]
 
-# ── Hole geometry (from hole.txt) ─────────────────────────────────────────────
+# ── Hole geometry ─────────────────────────────────────────────────────────────
 HOLE_R, HOLE_Z, HOLE_Y1, HOLE_Y2 = 13.5, 42.4777, -150.0, 150.0
 
 # ── Build ─────────────────────────────────────────────────────────────────────
@@ -80,23 +81,21 @@ with BuildPart() as part:
         make_face()
     extrude(amount=125)
 
-    # 2. Slot cut — offset +20.02 mm in Z, ±150 mm along X
+    # 2. Slot cut
     with BuildSketch(Plane(origin=Vector(0, 0, 20.02), x_dir=Vector(0, 1, 0), z_dir=Vector(1, 0, 0))) as cut_sk:
         with BuildLine():
             Polyline(*profile_yz, close=True)
         make_face()
     extrude(cut_sk.sketch, amount=150, both=True, mode=Mode.SUBTRACT)
 
-    # 3. Circular hole cuts — plane at X=-50, offset +20.02 mm in Z, ±100 mm along X
+    # 3. Circular hole cuts
     hole_plane = Plane(origin=Vector(-50, 0, 20.02), x_dir=Vector(0, 1, 0), z_dir=Vector(1, 0, 0))
     with BuildSketch(hole_plane) as hole_sk:
         with Locations((HOLE_Y1, HOLE_Z), (HOLE_Y2, HOLE_Z)):
             Circle(radius=HOLE_R)
     extrude(hole_sk.sketch, amount=100, both=True, mode=Mode.SUBTRACT)
 
-    # 4. Fillet — 20 mm radius on all 25 mm edges along the X axis
-    #    These are the flange-thickness edges (X: -50 ↔ -75), identified by:
-    #    length ≈ 25 mm, constant Y and Z (purely X-direction)
+    # 4. Fillet — 20 mm on 25 mm X-axis flange edges
     edges_25mm_x = [
         e for e in part.part.edges()
         if e.geom_type == GeomType.LINE
@@ -106,8 +105,7 @@ with BuildPart() as part:
     ]
     fillet(edges_25mm_x, radius=20)
 
-    # 5. Fillet — 20 mm radius on the Y-axis edge at X = -105 (stub side wall)
-    #    Selects only the real 40 mm edge; excludes the tiny slot-remnant edge
+    # 5. Fillet — 20 mm on Y-axis edge at X = -105
     edges_y_x105 = [
         e for e in part.part.edges()
         if e.geom_type == GeomType.LINE
@@ -121,8 +119,30 @@ with BuildPart() as part:
 # ── Display ───────────────────────────────────────────────────────────────────
 show(part.part, names=["H-Profile + Slot + Holes + Fillets"])
 
-# ── Export to STEP ────────────────────────────────────────────────────────────
-import os
-step_path = os.path.expanduser("~/Desktop/h_profile_model.step")
-export_step(part.part, step_path)
-print(f"STEP exported to: {step_path}")
+# ── STEP + STL Export — pop-up dialog ────────────────────────────────────────
+import tkinter as tk
+from tkinter import filedialog
+
+root = tk.Tk()
+root.withdraw()
+root.attributes("-topmost", True)
+
+export_path = filedialog.asksaveasfilename(
+    title="Save STEP file",
+    defaultextension=".step",
+    filetypes=[("STEP files", "*.step *.stp"), ("All files", "*.*")],
+    initialfile="h_profile_model.step",
+)
+root.destroy()
+
+if export_path:
+    # ── STEP export ──────────────────────────────────────────────────────────
+    export_step(part.part, export_path)
+    print(f"STEP exported to: {export_path}")
+
+    # ── STL export — same folder, same base name ─────────────────────────────
+    stl_path = os.path.splitext(export_path)[0] + ".stl"
+    export_stl(part.part, stl_path)
+    print(f"STL  exported to: {stl_path}")
+else:
+    print("Export cancelled.")
