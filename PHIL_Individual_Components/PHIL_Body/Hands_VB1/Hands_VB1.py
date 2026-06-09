@@ -27,31 +27,19 @@ import math as _math
 
 # ══════════════════════════════════════════════════════════════════════════════
 # SHARED ASSEMBLY ORIGIN  (= Hand1 centroid in world coords)
-# All three models normalise to their own centroid, then are moved to sit at
-# their correct world offset relative to this assembly origin.
 # ══════════════════════════════════════════════════════════════════════════════
 
 ASM_OX = 540716.7578
 ASM_OY = 234098.9648
 
-# ──────────────────────────────────────────────────────────────────────────────
-# Helper: translate a completed Compound/Solid by a world offset
-# ──────────────────────────────────────────────────────────────────────────────
 def _offset(solid, world_ox, world_oy):
-    """Move a solid built at its own local origin to the correct assembly position."""
     dx = world_ox - ASM_OX
     dy = world_oy - ASM_OY
     return solid.moved(Location((dx, dy, 0)))
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# ██   ██  █████  ███    ██ ██████      ██
-# ██   ██ ██   ██ ████   ██ ██   ██    ███
-# ███████ ███████ ██ ██  ██ ██   ██     ██
-# ██   ██ ██   ██ ██  ██ ██ ██   ██     ██
-# ██   ██ ██   ██ ██   ████ ██████      ██
-# HAND 1 — End fitting (slot + cut + annular + chamfers + holes + text)
-# Local centroid: ox=540716.7578  oy=234098.9648
+# HAND 1
 # ══════════════════════════════════════════════════════════════════════════════
 
 _h1_ox = 540716.7578
@@ -138,7 +126,6 @@ def _h1_norm(pts):
 _slot_pts = _h1_norm(_slot_raw)
 _cut_pts  = _h1_norm(_cut_raw)
 
-# --- Slot (Body 1) ---
 with BuildPart() as _sp:
     with BuildSketch(Plane(origin=(0, 0, 0), z_dir=(0, 0, 1))):
         with BuildLine(): Polyline(*_slot_pts, close=True)
@@ -146,7 +133,6 @@ with BuildPart() as _sp:
     extrude(amount=50.0)
 _h1_joined = _sp.part
 
-# --- Cut (Body 2) ---
 with BuildPart() as _cp:
     with BuildSketch(Plane(origin=(0, 0, 10), z_dir=(0, 0, 1))):
         with BuildLine(): Polyline(*_cut_pts, close=True)
@@ -154,7 +140,6 @@ with BuildPart() as _cp:
     extrude(amount=30.0)
 _h1_joined = _h1_joined.fuse(_cp.part)
 
-# --- Extrude ring (Body 3) ---
 _extrude_raw = [
     (541466.7188,234228.0273),(541470.2344,234224.2383),(541473.2031,234220.0586),
     (541475.625,234215.5078),(541477.4609,234210.6836),(541478.6328,234205.6836),
@@ -178,7 +163,6 @@ with BuildPart() as _ep:
     extrude(amount=30.0)
 _h1_extrude_solid = _ep.part
 
-# --- Annular ring (Body 4) ---
 def _h1_sort_angle(pts):
     cx = sum(p[0] for p in pts)/len(pts); cy = sum(p[1] for p in pts)/len(pts)
     return sorted(pts, key=lambda p: _math.atan2(p[1]-cy, p[0]-cx))
@@ -227,7 +211,6 @@ with BuildPart() as _ap:
     extrude(amount=30.0, mode=Mode.SUBTRACT)
 _h1_joined = _h1_joined.fuse(_ap.part)
 
-# --- New extrude (Body 5) ---
 _new_extrude_raw = [
     (541466.7188,234246.6016),(541466.7188,234238.3789),(541466.7188,234235.6055),
     (541466.7188,234232.9688),(541466.7188,234230.4297),(541466.7188,234228.0273),
@@ -254,7 +237,6 @@ with BuildPart() as _nep:
     extrude(amount=30.0)
 _h1_joined = _h1_joined.fuse(_nep.part)
 
-# --- Chamfer ring (loft outer→inner) ---
 _chamfer_outer_raw = [
     (541466.7188,234238.3789),(541471.25,234234.7852),(541475.3516,234230.6836),
     (541478.8672,234226.0938),(541481.875,234221.1328),(541484.2188,234215.8398),
@@ -303,7 +285,6 @@ _chamfer_mirrored = mirror(_chamfer_solid, about=Plane(origin=(0,0,25), z_dir=(0
 _h1_joined = _h1_joined.fuse(_nep.part)
 _h1_joined = _h1_joined.cut(_chamfer_solid).cut(_chamfer_mirrored)
 
-# --- New extrude 2 cut ---
 _ne2_raw = [
     (541466.7188,234246.6016),(541466.7188,234238.3789),(541466.7188,234235.6055),
     (541466.7188,234232.9688),(541466.7188,234230.4297),(541466.7188,234228.0273),
@@ -330,7 +311,6 @@ with BuildPart() as _ne2p:
     extrude(amount=50.0)
 _h1_joined = _h1_joined.cut(_ne2p.part)
 
-# --- Hollow disk 1 cut ---
 def _sort_angle_2d(pts):
     cx=sum(p[0] for p in pts)/len(pts); cy=sum(p[1] for p in pts)/len(pts)
     return sorted(pts, key=lambda p: _math.atan2(p[1]-cy, p[0]-cx))
@@ -383,7 +363,6 @@ with BuildPart() as _d1p:
     extrude(amount=10.0, mode=Mode.SUBTRACT)
 _h1_joined = _h1_joined.cut(_d1p.part)
 
-# --- Hollow disk 2 cut ---
 _disk2_outer_raw = [
     (541400.2344,234121.4648),(541403.3203,234126.0938),(541406.9141,234130.293),
     (541411.0156,234134.0234),(541415.5078,234137.2266),(541425.5859,234141.8555),
@@ -432,7 +411,6 @@ with BuildPart() as _d2p:
     extrude(amount=10.0, mode=Mode.SUBTRACT)
 _h1_joined = _h1_joined.cut(_d2p.part)
 
-# --- Hole 1 cut ---
 _hole_raw = [
     (541447.6172,234088.418),(541449.7656,234090.5469),(541451.3672,234093.1055),
     (541452.3828,234095.9766),(541452.6953,234098.9648),(541452.3828,234101.9727),
@@ -456,7 +434,6 @@ with BuildPart() as _hp:
     extrude(amount=18.5)
 _h1_joined = _h1_joined.cut(_hp.part)
 
-# --- Hole 2 cut ---
 _hole2_raw = [
     (539980.7812,234088.418),(539983.3594,234086.8164),(539986.2109,234085.8203),
     (539989.2188,234085.4688),(539992.2266,234085.8203),(539995.0781,234086.8164),
@@ -480,7 +457,6 @@ with BuildPart() as _h2p:
     extrude(amount=18.5)
 _h1_joined = _h1_joined.cut(_h2p.part)
 
-# --- Cut2 (hexagon 1) ---
 _cut2_pts = [(x-_h1_ox, y-_h1_oy) for x,y in [
     (539989.2188,234065.7812),(539960.4688,234082.3828),(539960.4688,234115.5664),
     (539989.2188,234132.168),(540017.9688,234115.5664),(540017.9688,234082.3828),
@@ -492,7 +468,6 @@ with BuildPart() as _c2p:
     extrude(amount=30.0)
 _h1_joined = _h1_joined.cut(_c2p.part)
 
-# --- Cut3 (hexagon 2) ---
 _cut3_pts = [(x-_h1_ox, y-_h1_oy) for x,y in [
     (541439.2188,234065.7812),(541410.4688,234082.3828),(541410.4688,234115.5664),
     (541439.2188,234132.168),(541467.9688,234115.5664),(541467.9688,234082.3828),
@@ -504,7 +479,6 @@ with BuildPart() as _c3p:
     extrude(amount=30.0)
 _h1_joined = _h1_joined.cut(_c3p.part)
 
-# --- Text: BOTTOM (bottom face) ---
 with BuildPart() as _tbp:
     with BuildSketch(Plane(origin=(-200,0,0), z_dir=(0,0,1))):
         Text("BOTTOM", font_size=50, align=(Align.CENTER, Align.CENTER))
@@ -512,7 +486,6 @@ with BuildPart() as _tbp:
 _tb_solid = mirror(_tbp.part, about=Plane(origin=(-200,0,0), z_dir=(0,1,0)))
 _h1_joined = _h1_joined.cut(_tb_solid)
 
-# --- Text: TOP LEFT (top face) ---
 with BuildPart() as _ttp:
     with BuildSketch(Plane(origin=(-200,0,50), z_dir=(0,0,1))):
         Text("TOP                       LEFT", font_size=50, align=(Align.CENTER, Align.CENTER))
@@ -520,20 +493,11 @@ with BuildPart() as _ttp:
 _h1_joined = _h1_joined.cut(_ttp.part)
 
 print(f"Hand1 volume : {_h1_joined.volume:,.1f} mm³")
-
-# Apply world offset (Hand1 is the assembly origin — no translation needed)
 hand1_solid = _h1_joined
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# ██   ██  █████  ███    ██ ██████     ██████
-# ██   ██ ██   ██ ████   ██ ██   ██        ██
-# ███████ ███████ ██ ██  ██ ██   ██     █████
-# ██   ██ ██   ██ ██  ██ ██ ██   ██    ██
-# ██   ██ ██   ██ ██   ████ ██████     ███████
-# HAND 2 — Bracket body (55-pt profile + arc cut + chamfer loft)
-# Local centroid: ox=541430.9375  oy=234188.6328
-# World offset from Hand1: (+714.18, +89.67)
+# HAND 2
 # ══════════════════════════════════════════════════════════════════════════════
 
 _h2_ox = 541430.9375
@@ -571,7 +535,6 @@ _h2_solid = _h2b.part
 
 def _p2(x, y): return (x-_h2_ox, y-_h2_oy)
 
-# Body 2 cut (47-segment polyline)
 _b2_pts = [
     (541429.453,234146.298),(541429.453,234153.965),(541424.102,234155.469),
     (541418.984,234157.617),(541414.141,234160.352),(541409.648,234163.672),
@@ -597,7 +560,6 @@ with BuildPart() as _b2p:
     extrude(amount=32.5)
 _h2_solid = _h2_solid.cut(_b2p.part)
 
-# Body 3 cut (arc profile)
 with BuildPart() as _b3p:
     with BuildSketch(Plane(origin=(0,0,7.5), z_dir=(0,0,1))):
         with BuildLine():
@@ -643,7 +605,6 @@ with BuildPart() as _b3p:
     extrude(amount=32.5)
 _h2_solid = _h2_solid.cut(_b3p.part)
 
-# Body 5 cut
 _b5_pts = [
     (541399.856,234153.965),(541399.856,234140.0),(541481.105,234140.0),
     (541482.344,234138.945),(541486.562,234134.414),(541490.273,234129.434),
@@ -682,7 +643,6 @@ with BuildPart() as _b5p:
     extrude(amount=32.5)
 _h2_solid = _h2_solid.cut(_b5p.part)
 
-# Chamfer loft (fuse)
 import math as _mc
 
 def _h2_sort_angle(pts):
@@ -755,26 +715,16 @@ with BuildPart() as _h2_chp:
 _h2_solid = _h2_solid.fuse(_h2_chp.part)
 
 print(f"Hand2 volume : {_h2_solid.volume:,.1f} mm³")
-
-# Apply world offset
 hand2_solid = _offset(_h2_solid, _h2_ox, _h2_oy)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# ██   ██  █████  ███    ██ ██████     ██████
-# ██   ██ ██   ██ ████   ██ ██   ██        ██
-# ███████ ███████ ██ ██  ██ ██   ██     █████
-# ██   ██ ██   ██ ██  ██ ██ ██   ██         ██
-# ██   ██ ██   ██ ██   ████ ██████     ██████
-# HAND 3 — Long slot bar (1450 mm × 100 mm slot + 10× holes + chamfers + text)
-# Local centroid: ox=540559.9415  oy=234155.4785
-# World offset from Hand1: (−156.82, +56.51)
+# HAND 3
 # ══════════════════════════════════════════════════════════════════════════════
 
 _h3_ox = 540559.9415
 _h3_oy = 234155.4785
 
-# --- Left and right semicircles → slot profile ---
 _h3_left = [
     (539834.9609,234253.9648),(539829.1406,234253.6328),(539823.3984,234252.6172),
     (539817.8516,234250.957),(539812.5,234248.6523),(539807.4609,234245.7422),
@@ -809,7 +759,6 @@ with BuildPart() as _h3b:
     extrude(amount=50.0)
 _h3_solid = _h3b.part
 
-# --- Hole row (10× circular holes, XZ-plane profile extruded 120 mm in +Y) ---
 _h3_hole_raw = [
     (541088.7109,18.5048),(541090.2344,19.6967),(541091.4453,21.25),
     (541092.1875,23.0589),(541092.4609,25.0),(541092.1875,26.9412),
@@ -834,7 +783,6 @@ for i in range(1, 10):
     _h3_all_holes = _h3_all_holes.fuse(_h3_hole_one.moved(Location((-i*50,0,0))))
 _h3_solid = _h3_solid.cut(_h3_all_holes)
 
-# --- Extrude row (10× circles, +X direction) ---
 _h3_ext2_raw = [
     (540031.2109,31.4952),(540029.6484,30.3033),(540028.4375,28.75),
     (540027.6953,26.9412),(540027.4609,25.0),(540027.6953,23.0589),
@@ -857,8 +805,6 @@ for i in range(1, 10):
     _h3_all_ext2 = _h3_all_ext2.fuse(_h3_ext2_one.moved(Location((i*50,0,0))))
 _h3_solid = _h3_solid.cut(_h3_all_ext2)
 
-# --- Text: TOP RIGHT (bottom face, Z=0) ---
-# Y offset +48.49 mm centres the text on the slot body in local space
 _h3_text_y = 48.49
 with BuildPart() as _h3t2p:
     with BuildSketch(Plane(origin=(-285, _h3_text_y, 0), z_dir=(0,0,1))):
@@ -867,7 +813,6 @@ with BuildPart() as _h3t2p:
 _h3_t2 = mirror(_h3t2p.part, about=Plane(origin=(-285, _h3_text_y, 0), z_dir=(0,1,0)))
 _h3_solid = _h3_solid.cut(_h3_t2)
 
-# --- Chamfer 1 (left end) ---
 import math as _mc2
 
 def _h3_sort_a(pts):
@@ -934,7 +879,6 @@ with BuildPart() as _ch1p:
     loft(ruled=True)
 _h3_solid = _h3_solid.cut(_ch1p.part)
 
-# --- Chamfer 2 (right end) ---
 _ch2_outer = [
     (541258.9453,234227.3828),(541262.4609,234230.7812),(541266.4062,234233.6523),
     (541270.7031,234235.9375),(541275.3125,234237.6172),(541280.0781,234238.6328),
@@ -978,7 +922,6 @@ with BuildPart() as _ch2p:
     loft(ruled=True)
 _h3_solid = _h3_solid.cut(_ch2p.part)
 
-# --- Hole cylinder 2 (top face, -Z) ---
 _h3_hole2_raw = [
     (539832.3047,234245.2344),(539827.0312,234244.5508),(539821.9141,234243.2227),
     (539816.9922,234241.2305),(539812.3828,234238.6328),(539808.125,234235.4492),
@@ -1006,7 +949,6 @@ with BuildPart() as _h3h2p:
     extrude(amount=-35.0)
 _h3_solid = _h3_solid.cut(_h3h2p.part)
 
-# --- Extrude cylinder 2 (right end, top face, -Z) ---
 _h3_ecyl2_raw = [
     (541297.9688,234164.7266),(541302.8906,234166.7188),(541307.5,234169.3164),
     (541311.7578,234172.4805),(541315.5469,234176.1719),(541318.8672,234180.3125),
@@ -1034,7 +976,6 @@ with BuildPart() as _h3ec2p:
     extrude(amount=-35.0)
 _h3_solid = _h3_solid.cut(_h3ec2p.part)
 
-# --- Text: BOTTOM (top face, Z=50) ---
 with BuildPart() as _h3txtp:
     with BuildSketch(Plane(origin=(-167, _h3_text_y, 50), z_dir=(0,0,1))):
         Text("BOTTOM", font_size=65, align=(Align.CENTER, Align.CENTER))
@@ -1042,13 +983,11 @@ with BuildPart() as _h3txtp:
 _h3_solid = _h3_solid.cut(_h3txtp.part)
 
 print(f"Hand3 volume : {_h3_solid.volume:,.1f} mm³")
-
-# Apply world offset
 hand3_solid = _offset(_h3_solid, _h3_ox, _h3_oy)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# DISPLAY — all three parts shown together in their correct assembly positions
+# DISPLAY
 # ══════════════════════════════════════════════════════════════════════════════
 
 set_defaults(axes=True, axes0=True, grid=(True, True, True), transparent=False)
@@ -1061,11 +1000,12 @@ show(
 )
 
 # ══════════════════════════════════════════════════════════════════════════════
-# EXPORT — STEP assembly file
+# STEP + STL Export
 # ══════════════════════════════════════════════════════════════════════════════
 
 import tkinter as tk
 from tkinter import filedialog
+import os
 
 _root = tk.Tk()
 _root.withdraw()
@@ -1080,11 +1020,16 @@ _export_path = filedialog.asksaveasfilename(
 _root.destroy()
 
 if _export_path:
-    # Export each part individually (STEP doesn't natively support multi-body
-    # compound assemblies from build123d without a Compound wrapper)
     from build123d import Compound
     assembly = Compound(children=[hand1_solid, hand2_solid, hand3_solid])
+
+    # ── STEP export ──────────────────────────────────────────────────────────
     export_step(assembly, _export_path)
-    print(f"Assembly exported to: {_export_path}")
+    print(f"STEP exported to: {_export_path}")
+
+    # ── STL export — same folder, same base name ─────────────────────────────
+    _stl_path = os.path.splitext(_export_path)[0] + ".stl"
+    export_stl(assembly, _stl_path)
+    print(f"STL  exported to: {_stl_path}")
 else:
     print("Export cancelled.")
