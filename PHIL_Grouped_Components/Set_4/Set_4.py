@@ -18,6 +18,9 @@ from build123d import *
 from ocp_vscode import show, set_defaults, Camera
 from pathlib import Path
 import math
+import os
+import tkinter as tk
+from tkinter import filedialog
 
 set_defaults(reset_camera=Camera.RESET, axes=True, axes0=True, grid=(True, True, True))
 
@@ -871,11 +874,31 @@ print("✓ Assembly created successfully.")
 print(f"  Chamber bounding box : {chamber_solid.bounding_box()}")
 print(f"  Screw bounding box   : {screw_solid.bounding_box()}")
 
+# ══════════════════════════════════════════════════════════════════════════════
+# EXPORT — STEP + STL with pop-up file dialog
+# ══════════════════════════════════════════════════════════════════════════════
+_assembly_compound = Compound([chamber_solid, screw_solid, screw_solid_copy])
 
+_root = tk.Tk()
+_root.withdraw()
+_root.attributes("-topmost", True)
 
-# ── Export all three bodies to a single STEP file ─────────────────────────────
-from pathlib import Path
+_export_path = filedialog.asksaveasfilename(
+    title="Save Assembly STEP file",
+    defaultextension=".step",
+    filetypes=[("STEP files", "*.step *.stp"), ("All files", "*.*")],
+    initialfile="assembly.step",
+)
+_root.destroy()
 
-export_path = Path(__file__).parent / "assembly.step"
-export_step(Compound([chamber_solid, screw_solid, screw_solid_copy]), export_path)
-print(f"✓ STEP file exported to: {export_path}")
+if _export_path:
+    # ── STEP export ──────────────────────────────────────────────────────────
+    export_step(_assembly_compound, _export_path)
+    print(f"✓ STEP exported to: {_export_path}")
+
+    # ── STL export — same folder, same base name ─────────────────────────────
+    _stl_path = os.path.splitext(_export_path)[0] + ".stl"
+    export_stl(_assembly_compound, _stl_path)
+    print(f"✓ STL  exported to: {_stl_path}")
+else:
+    print("\nExport cancelled.")
