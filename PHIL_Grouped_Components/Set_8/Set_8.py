@@ -218,9 +218,13 @@ if export_dir:
     step_path = os.path.join(export_dir, "Arduino_Plate.step")
     export_step(result, step_path)
     print(f"\nSTEP exported to: {step_path}")
+    
+    stl_path = os.path.join(export_dir, "Arduino_Plate.stl")
+    export_stl(result, stl_path)
+    print(f"STL exported to: {stl_path}")
 else:
     print("\nExport cancelled — no folder selected.")
-
+    
 # ═══════════════════════════════════════════════════════════════════════════════
 # DISPLAY
 # ═══════════════════════════════════════════════════════════════════════════════
