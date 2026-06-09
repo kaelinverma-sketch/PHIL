@@ -1,454 +1,708 @@
-"""
-Build123d script — single hollow body with all features:
-
-BODY — Hollow open box:
-  Outer dimensions : 1960.94 x 640.00 x 372.50 mm  (X, Y, Z)
-  Wall thickness   : 50 mm
-  Face convention  (XZ plane = FRONT):
-    Solid faces : front (Y=0), back (Y=640), top (Z=372.5)
-    Open  faces : left (X=0), right (X=1960.94), bottom (Z=0)
-  Corner at world origin (0, 0, 0)
-
-EXTRUDE CUT 1  : 940.94 x 540.00 x 372.50 mm, centred in X and Y, full height.
-EXTRUDE CUT 2  : 650.94 x 50.00 x 372.50 mm, centred in X, through front wall.
-SLOT CUT RIGHT : 100.04 wide x 226.30 tall, 50 mm deep, back face, centre X=1205.96.
-SLOT CUT LEFT  : Mirror of right slot, centre X=754.98 mm.
-BOSS           : 60(X) x 140(Y) x 50(Z) mm, on top face at X=50, Y=225, Z=322.5.
-HOLE           : Dia 233.47 mm, centre X=294.99, Y=320.38, through top wall (50 mm).
-
-HOW TO USE WITH OCP CAD VIEWER:
-  1. In VS Code: Cmd/Ctrl+Shift+P -> "OCP CAD Viewer: Open Viewer"
-  2. Wait for the 3D panel to load
-  3. Run:  python box_hollow_ocp.py
-
-Install:  pip install build123d ocp-vscode
-"""
-
 from build123d import *
+from ocp_vscode import show
+import math
 
-# ---------------------------------------------------------------------------
-# Dimensions
-# ---------------------------------------------------------------------------
-LENGTH    = 1960.94
-WIDTH     =  640.00
-HEIGHT    =  372.50
-T         =   50.00
+# ═══════════════════════════════════════════════════════════════════════════════
+# 1. LARGE BOX with all cavity cuts
+# ═══════════════════════════════════════════════════════════════════════════════
+length  = 1960.94
+width   =  790.00
+height  = 1070.00
 
-CUT1_LEN  =  940.94
-CUT1_WID  =  540.00
+length2  =  40.0
+width2   = 100.0
+depth2   =  55.0
+offset_y = 250.0
+x_positions = [275.0, 735.0, 1185.94, 1644.10]
 
-CUT2_LEN  =  650.94
-CUT2_WID  =   50.00
+with BuildPart() as box_part:
+    with BuildSketch(Plane.XY):
+        with Locations((length / 2, width / 2)):
+            Rectangle(length, width)
+    extrude(amount=height)
 
-SLOT_W    =  100.04
-SLOT_RH   =  126.26
-SLOT_R    = SLOT_W / 2
-SLOT_TOT  = SLOT_RH + SLOT_W       # 226.30 mm
-SLOT_DEP  =   50.00
+    with BuildSketch(Plane.XY):
+        for x0 in x_positions:
+            with Locations((x0 + length2 / 2, offset_y + width2 / 2)):
+                Rectangle(length2, width2)
+    extrude(amount=depth2, mode=Mode.SUBTRACT)
 
-TAB_X     =  60.00
-TAB_Y     = 140.00
-TAB_Z     =  50.00
-tab_ox    =  45.00
-tab_oy    = 225.00
-tab_oz    = HEIGHT - TAB_Z          # 322.50 mm
+    length3   = 1860.94
+    width3    =  322.50
+    height3   = 1020.00
+    offset3_x =    50.0
+    offset3_y =    50.0
+    offset3_z =    50.0
+    cut_plane = Plane.XY.offset(offset3_z)
+    with BuildSketch(cut_plane):
+        with Locations((offset3_x + length3 / 2, offset3_y + width3 / 2)):
+            Rectangle(length3, width3)
+    extrude(amount=height3, mode=Mode.SUBTRACT)
 
-HOLE_D    = 233.47
-HOLE_R    = HOLE_D / 2              # 116.735 mm
-HOLE_CX   = 294.99
-HOLE_CY   = 320.38
+# Plate cut
+plate_l  = 1960.94
+plate_h  =   640.0
+plate_t  =   372.5
+plate_z  =  1070.0
+with BuildPart() as box_with_plate_cut:
+    add(box_part.part)
+    xz_plane = Plane(origin=(0, 0, plate_z), x_dir=(1, 0, 0), z_dir=(0, 1, 0))
+    with BuildSketch(xz_plane):
+        with Locations((plate_l / 2, plate_h / 2)):
+            Rectangle(plate_l, plate_h)
+    extrude(amount=plate_t, mode=Mode.SUBTRACT)
 
-# ---------------------------------------------------------------------------
-# Positions
-# ---------------------------------------------------------------------------
-cx        = LENGTH / 2
-cy        = WIDTH  / 2
-cut1_x    = cx - CUT1_LEN / 2
-cut1_y    = cy - CUT1_WID / 2
-cut2_x    = cx - CUT2_LEN / 2
-cut2_y    = 0
+# ═══════════════════════════════════════════════════════════════════════════════
+# 2. BACK BOX with cylinder cuts and small holes
+# ═══════════════════════════════════════════════════════════════════════════════
+cylinders = [(754.91, 749.96), (1205.92, 749.96)]
 
-slot_r_cx = LENGTH - 754.98        # 1205.96 mm
-slot_cz   = HEIGHT / 2             # 186.25 mm
+back_box_l  =  350.94
+back_box_h  =  750.00
+back_box_d  =  377.50
+back_box_x  =  805.0
+back_box_z  =    0.0
+back_box_plane = Plane(origin=(0, 790 - 377.5, 0), x_dir=(1, 0, 0), z_dir=(0, 1, 0))
 
-# ---------------------------------------------------------------------------
-# Slot tool solids
-# ---------------------------------------------------------------------------
-with BuildPart() as _slot_build:
-    with BuildSketch(Plane.XY) as _sk:
-        SlotOverall(width=SLOT_TOT, height=SLOT_W)
-    extrude(_sk.sketch, amount=SLOT_DEP)
+cyl2_r  = 321.63 / 2
+hole3_r = 151.31 / 2
+hole3_positions = [(754.98, 100.01), (1205.94, 100.01)]
 
-slot_right = (
-    _slot_build.part
-    .rotate(Axis.Z, 90)
-    .rotate(Axis.X, -90)
-    .translate(Vector(slot_r_cx, WIDTH - SLOT_DEP, slot_cz))
+with BuildPart() as back_box_base:
+    with BuildSketch(back_box_plane):
+        with Locations((back_box_x + back_box_l / 2, -(back_box_z + back_box_h / 2))):
+            Rectangle(back_box_l, back_box_h)
+    extrude(amount=back_box_d)
+
+with BuildPart() as back_box:
+    add(back_box_base.part)
+    for cx, cz in cylinders:
+        with BuildSketch(back_box_plane):
+            with Locations((cx, -cz)):
+                Circle(cyl2_r)
+        extrude(amount=back_box_d, both=False, mode=Mode.SUBTRACT)
+    hole3_plane = Plane(origin=(0, 790, 0), x_dir=(1, 0, 0), z_dir=(0, 1, 0))
+    with BuildSketch(hole3_plane):
+        for cx, cz in hole3_positions:
+            with Locations((cx, -cz)):
+                Circle(hole3_r)
+    extrude(amount=-back_box_d, both=False, mode=Mode.SUBTRACT)
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 4. DISC CUTS on main body
+# ═══════════════════════════════════════════════════════════════════════════════
+cyl_r       = 1430.91 / 2
+cyl_depth   =  376.5
+back_y      =  790.0
+back_plane  = Plane(origin=(0, back_y - 367.5, 0), x_dir=(1, 0, 0), z_dir=(0, 1, 0))
+ring_y      = back_y - 367.5 - 10
+ring_plane  = Plane(origin=(0, ring_y, 0), x_dir=(1, 0, 0), z_dir=(0, 1, 0))
+disc_plane  = Plane(origin=(0, ring_y + 10, 0), x_dir=(1, 0, 0), z_dir=(0, 1, 0))
+hollow_depth = 377.5
+outer_r2 = 470.0 / 2
+inner_r2 = 260.0 / 2
+
+with BuildPart() as after_disc_cuts:
+    add(box_with_plate_cut.part)
+    for cx, cz in cylinders:
+        with BuildSketch(back_plane):
+            with Locations((cx, -cz)):
+                Circle(cyl_r)
+        extrude(amount=cyl_depth, mode=Mode.SUBTRACT)
+    for cx, cz in cylinders:
+        with BuildSketch(ring_plane):
+            with Locations((cx, -cz)):
+                Circle(outer_r2)
+                Circle(inner_r2, mode=Mode.SUBTRACT)
+        extrude(amount=hollow_depth, both=False, mode=Mode.SUBTRACT)
+    for cx, cz in cylinders:
+        with BuildSketch(disc_plane):
+            with Locations((cx, -cz)):
+                Circle(cyl_r)
+        extrude(amount=hollow_depth, both=False, mode=Mode.SUBTRACT)
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 5. RECTANGLE CUT on top face
+# ═══════════════════════════════════════════════════════════════════════════════
+rect_l  = 1500.0
+rect_w  =  400.0
+rect_h  =  400.0
+top_z   = 1070.0
+rect_cx = length / 2
+rect_cy = width  / 2
+
+with BuildPart() as after_rect_cut:
+    add(after_disc_cuts.part)
+    with BuildSketch(Plane.XY.offset(top_z)):
+        with Locations((rect_cx, rect_cy)):
+            Rectangle(rect_l, rect_w)
+    extrude(amount=rect_h, mode=Mode.SUBTRACT)
+
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 3. ARC HOLLOW CYLINDERS: 187 deg anti-clockwise from +Z, 10mm thick in +Y
+# ═══════════════════════════════════════════════════════════════════════════════
+import math
+
+arc_outer_r  = 1333.63 / 2
+arc_inner_r  = 1273.85 / 2
+arc_thickness = 10.0       # mm in +Y
+arc_degrees  = 187.0
+
+# Sketch plane on XZ at ring_y, normal +Y
+# local X = world X, local Y = world -Z
+# world +Z = sketch angle 270 deg
+# anti-clockwise in world = decreasing sketch angle
+# 187 deg anti-clockwise from +Z: 270 → 270 - 187 = 83 deg
+SK_START = 270.0
+SK_END   = 270.0 - arc_degrees  # 83.0
+
+def make_arc_pts(cx, cz, r, a_start, a_end):
+    a_mid = (a_start + a_end) / 2
+    return (
+        Vector(cx + r * math.cos(math.radians(a_start)), -cz + r * math.sin(math.radians(a_start))),
+        Vector(cx + r * math.cos(math.radians(a_mid)),   -cz + r * math.sin(math.radians(a_mid))),
+        Vector(cx + r * math.cos(math.radians(a_end)),   -cz + r * math.sin(math.radians(a_end))),
+    )
+
+# Single arc ring at C1 (x=754.91) as separate body
+cx1, cz1 = cylinders[0]
+p1o, p2o, p3o = make_arc_pts(cx1, cz1, arc_outer_r, SK_START, SK_END)
+p1i, p2i, p3i = make_arc_pts(cx1, cz1, arc_inner_r, SK_END, SK_START)
+with BuildPart() as arc_ring_c1:
+    with BuildSketch(ring_plane):
+        with BuildLine():
+            ThreePointArc(p1o, p2o, p3o)
+            Line(p3o, p1i)
+            ThreePointArc(p1i, p2i, p3i)
+            Line(p3i, p1o)
+        make_face()
+    extrude(amount=arc_thickness, both=False)
+
+# Mirrored arc ring at C2 (clockwise, 270 → 457)
+cx2, cz2 = cylinders[1]
+p1o, p2o, p3o = make_arc_pts(cx2, cz2, arc_outer_r, SK_START, SK_START + arc_degrees)
+p1i, p2i, p3i = make_arc_pts(cx2, cz2, arc_inner_r, SK_START + arc_degrees, SK_START)
+with BuildPart() as arc_ring_c2:
+    with BuildSketch(ring_plane):
+        with BuildLine():
+            ThreePointArc(p1o, p2o, p3o)
+            Line(p3o, p1i)
+            ThreePointArc(p1i, p2i, p3i)
+            Line(p3i, p1o)
+        make_face()
+    extrude(amount=arc_thickness, both=False)
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 6. COMBINE ALL
+# ═══════════════════════════════════════════════════════════════════════════════
+with BuildPart() as final_body:
+    add(after_rect_cut.part)
+    add(back_box.part)
+    add(arc_ring_c1.part, mode=Mode.SUBTRACT)
+    add(arc_ring_c2.part, mode=Mode.SUBTRACT)
+
+# New cylinder d=151.31mm, depth=367.5mm at x=754.98, z=100, separate body
+new_cyl_r     = 151.31 / 2
+new_cyl_depth = 367.5
+new_cyl_plane = Plane(origin=(0, 790 - 367.5, 0), x_dir=(1, 0, 0), z_dir=(0, 1, 0))
+
+with BuildPart() as final_body2:
+    add(final_body.part)
+    # C1 side
+    with BuildSketch(new_cyl_plane):
+        with Locations((754.98, -100.0)):
+            Circle(new_cyl_r)
+    extrude(amount=new_cyl_depth, both=False, mode=Mode.SUBTRACT)
+    # C2 side (mirrored)
+    with BuildSketch(new_cyl_plane):
+        with Locations((1205.94, -100.0)):
+            Circle(new_cyl_r)
+    extrude(amount=new_cyl_depth, both=False, mode=Mode.SUBTRACT)
+
+# 2 holes d=240mm and 2 holes d=173.85mm, all through in Y direction
+holes_240 = [(754.99, 750.02), (1205.94, 750.02)]
+holes_173 = [(295.9,  750.02), (1665.03, 750.02)]
+
+with BuildPart() as final_body3:
+    add(final_body2.part)
+    with BuildSketch(Plane.XZ.offset(0)):
+        for cx, cz in holes_240:
+            with Locations((cx, cz)):
+                Circle(240.0 / 2)
+        for cx, cz in holes_173:
+            with Locations((cx, cz)):
+                Circle(173.85 / 2)
+    extrude(amount=-width, both=False, mode=Mode.SUBTRACT)
+
+# 2 through holes d=35mm at x=1910.94, z=480.01 and z=1020
+holes_35 = [(1910.94, 480.01), (1910.94, 1020.0), (50.0, 480.01), (50.0, 1020.0)]
+
+with BuildPart() as final_body4:
+    add(final_body3.part)
+    with BuildSketch(Plane.XZ.offset(0)):
+        for cx, cz in holes_35:
+            with Locations((cx, cz)):
+                Circle(35.0 / 2)
+    extrude(amount=-width, both=False, mode=Mode.SUBTRACT)
+
+# Profile points (X, Z coords — sketch on XZ plane, extrude in +Y)
+profile_pts = [
+    Vector(0, 0),
+    Vector(50, 0),
+    Vector(78.75, 16.6),
+    Vector(78.75, 49.8),
+    Vector(50, 66.4),
+    Vector(0, 66.4),
+]
+
+# Original planes (left/front side)
+plane1  = Plane(origin=(1013.67, 725, 700), x_dir=(0, 0, -1), z_dir=(0, 1, 0))
+plane2  = Plane(origin=(0,       725, 513.2),  x_dir=(1, 0, 0),  z_dir=(0, 1, 0))
+plane3  = Plane(origin=(366.8,   725, 0),      x_dir=(0, 0, 1),  z_dir=(0, 1, 0))
+
+# Mirrored planes (right side of same face, x_dir flipped)
+plane1m = Plane(origin=(1960.94, 725, 1053.2), x_dir=(-1, 0, 0), z_dir=(0, 1, 0))
+plane2m = Plane(origin=(1960.94, 725, 513.2),  x_dir=(-1, 0, 0), z_dir=(0, 1, 0))
+plane3m = Plane(origin=(1594.14, 725, 0),      x_dir=(0, 0, -1), z_dir=(0, 1, 0))
+
+# Mirror pts for planes 1m & 2m: negate Y (local Y flips from -Z to +Z)
+profile_pts_m12 = [Vector(p.X, -p.Y) for p in profile_pts]
+# Mirror pts for plane3m: negate Y (local Y flips from +X to -X)
+profile_pts_m3  = [Vector(p.X, -p.Y) for p in profile_pts]
+
+with BuildPart() as final_body5:
+    add(final_body4.part)
+    # Originals
+    for plane in [plane1, plane2, plane3]:
+        with BuildSketch(plane):
+            with BuildLine():
+                Polyline(*profile_pts, close=True)
+            make_face()
+        extrude(amount=25, mode=Mode.SUBTRACT)
+    # Mirrors 1 & 2
+    for plane in [plane1m, plane2m]:
+        with BuildSketch(plane):
+            with BuildLine():
+                Polyline(*profile_pts_m12, close=True)
+            make_face()
+        extrude(amount=25, mode=Mode.SUBTRACT)
+    # Copy of yellow profile at x=1527.73, same orientation
+    plane3_copy = Plane(origin=(1527.73, 725, 0), x_dir=(0, 0, 1), z_dir=(0, 1, 0))
+    with BuildSketch(plane3_copy):
+        with BuildLine():
+            Polyline(*profile_pts, close=True)
+        make_face()
+    extrude(amount=25, mode=Mode.SUBTRACT)
+
+# 3 holes d=35mm on back face (Y=790), depth=127.5mm in -Y, coords are (X, Z)
+back_holes = [(854.99, 219.5), (1105.94, 219.5), (980.47, 650.0)]
+back_hole_plane = Plane(origin=(0, 790, 0), x_dir=(1, 0, 0), z_dir=(0, 1, 0))
+
+with BuildPart() as final_body6:
+    add(final_body5.part)
+    with BuildSketch(back_hole_plane):
+        for cx, cz in back_holes:
+            with Locations((cx, -cz)):
+                Circle(35.0 / 2)
+    extrude(amount=-127.5, both=False, mode=Mode.SUBTRACT)
+
+# Profile 1 cut into final body
+with BuildPart() as final_body7:
+    add(final_body6.part)
+    with BuildSketch(plane1):
+        with BuildLine():
+            Polyline(*profile_pts, close=True)
+        make_face()
+    extrude(amount=25, mode=Mode.SUBTRACT)
+
+# New box cut: 146.99mm (X) x 100mm (Z) x 377.5mm (-Y)
+with BuildPart() as final_body8:
+    add(final_body7.part)
+    box_plane = Plane(origin=(906.95, 790, 800), x_dir=(1, 0, 0), z_dir=(0, 1, 0))
+    with BuildSketch(box_plane):
+        with Locations((146.99 / 2, 100.0 / 2)):
+            Rectangle(146.99, 100.0)
+    extrude(amount=-377.5, mode=Mode.SUBTRACT)
+
+# Profile copy and mirror as extrude cuts
+with BuildPart() as final_body9:
+    add(final_body8.part)
+    with BuildSketch(Plane(origin=(805, 725, 252.7), x_dir=(1, 0, 0), z_dir=(0, 1, 0))):
+        with BuildLine():
+            Polyline(*profile_pts, close=True)
+        make_face()
+    extrude(amount=25, mode=Mode.SUBTRACT)
+    with BuildSketch(Plane(origin=(805 + 350.94, 725, 252.7 - 66.4), x_dir=(-1, 0, 0), z_dir=(0, 1, 0))):
+        with BuildLine():
+            Polyline(*profile_pts, close=True)
+        make_face()
+    extrude(amount=25, mode=Mode.SUBTRACT)
+
+# Hole d=157.02mm on bottom face (z=0) at x=980.64, y=595, depth=700mm
+with BuildPart() as final_body10:
+    add(final_body9.part)
+    with BuildSketch(Plane.XY):
+        with Locations((980.64, 595)):
+            Circle(157.02 / 2)
+    extrude(amount=700, mode=Mode.SUBTRACT)
+
+# Hole d=244.07mm on bottom face (z=0) at x=980.64, y=595, depth=150mm
+with BuildPart() as final_body11:
+    add(final_body10.part)
+    with BuildSketch(Plane.XY):
+        with Locations((980.64, 595)):
+            Circle(244.07 / 2)
+    extrude(amount=150, mode=Mode.SUBTRACT)
+
+# Chamfer on 244.07mm hole entry at bottom face: height=37mm, slant=42mm
+chamfer_h = 37.0
+chamfer_slant = 42.0
+chamfer_w = math.sqrt(chamfer_slant**2 - chamfer_h**2)
+hole_r = 244.07 / 2
+
+# Chamfer as standalone solid for positioning analysis
+with BuildPart() as chamfer_solid:
+    with BuildSketch(Plane(origin=(980.64, 595, chamfer_h), x_dir=(1, 0, 0), z_dir=(0, 1, 0))):
+        with BuildLine():
+            Polyline(
+                Vector(hole_r, 0),
+                Vector(hole_r + chamfer_w, chamfer_h),
+                Vector(hole_r, chamfer_h),
+                close=True,
+            )
+        make_face()
+    revolve(axis=Axis((980.64, 595, 0), (0, 0, 1)), revolution_arc=360)
+
+with BuildPart() as final_body12:
+    add(final_body11.part)
+    with BuildSketch(Plane(origin=(980.64, 595, chamfer_h), x_dir=(1, 0, 0), z_dir=(0, 1, 0))):
+        with BuildLine():
+            Polyline(
+                Vector(hole_r, 0),
+                Vector(hole_r + chamfer_w, chamfer_h),
+                Vector(hole_r, chamfer_h),
+                close=True,
+            )
+        make_face()
+    revolve(axis=Axis((980.64, 595, 0), (0, 0, 1)), revolution_arc=360, mode=Mode.SUBTRACT)
+
+# Second chamfer: d=244.07mm → d=157.02mm over height=85mm, standalone solid
+chamfer2_h       = 85.0
+chamfer2_r_start = 244.07 / 2   # 122.035mm
+chamfer2_r_end   = 157.02 / 2   #  78.51mm
+
+with BuildPart() as chamfer2_solid:
+    with BuildSketch(Plane(origin=(980.64, 595, 235), x_dir=(1, 0, 0), z_dir=(0, 1, 0))):
+        with BuildLine():
+            Polyline(
+                Vector(chamfer2_r_end,   0),
+                Vector(chamfer2_r_start, chamfer2_h),
+                Vector(chamfer2_r_end,   chamfer2_h),
+                close=True,
+            )
+        make_face()
+    revolve(axis=Axis((980.64, 595, 0), (0, 0, 1)), revolution_arc=360)
+
+with BuildPart() as final_body13:
+    add(final_body12.part)
+    with BuildSketch(Plane(origin=(980.64, 595, 235), x_dir=(1, 0, 0), z_dir=(0, 1, 0))):
+        with BuildLine():
+            Polyline(
+                Vector(chamfer2_r_end,   0),
+                Vector(chamfer2_r_start, chamfer2_h),
+                Vector(chamfer2_r_end,   chamfer2_h),
+                close=True,
+            )
+        make_face()
+    revolve(axis=Axis((980.64, 595, 0), (0, 0, 1)), revolution_arc=360, mode=Mode.SUBTRACT)
+
+# Cylinder d=47mm, h=98.5mm with 45° slant cut at z=75mm
+with BuildPart() as cyl_body:
+    with BuildSketch(Plane.XY):
+        with Locations((980.64, 595)):
+            Circle(47.0 / 2)
+    extrude(amount=98.5)
+    # 45° cut: plane passes through centre at z=75, normal tilted 45° in XZ plane
+    slant_plane = Plane(
+        origin=(980.64, 595, 75),
+        x_dir=(0, 1, 0),
+        z_dir=(math.sqrt(2) / 2, 0, math.sqrt(2) / 2),
+    )
+    with BuildSketch(slant_plane):
+        Rectangle(500, 500)
+    extrude(amount=150, mode=Mode.SUBTRACT)
+
+# Curved cylinder: d=47mm swept along arc R=122mm, 75deg each way in XY plane at z=75
+R_arc  = 122.0
+arc_cx = 980.64
+arc_cy = 595.0 + R_arc   # 717.0  (centre offset +R in Y, tangent at 270° = +X)
+arc_z  = 75.0
+
+# Forward arc: 270° → 345° CCW (+X direction)
+arc_mid_x = arc_cx + R_arc * math.cos(math.radians(307.5))
+arc_mid_y = arc_cy + R_arc * math.sin(math.radians(307.5))
+arc_end_x = arc_cx + R_arc * math.cos(math.radians(345.0))
+arc_end_y = arc_cy + R_arc * math.sin(math.radians(345.0))
+
+# Reverse arc: 270° → 195° CW (−X direction), same centre
+rev_end_x = arc_cx + R_arc * math.cos(math.radians(195.0))
+rev_end_y = arc_cy + R_arc * math.sin(math.radians(195.0))
+rev_mid_x = arc_cx + R_arc * math.cos(math.radians(232.5))
+rev_mid_y = arc_cy + R_arc * math.sin(math.radians(232.5))
+
+# Tangent at reverse-end (195°) pointing CCW toward start (270°)
+rev_tan_x = -math.sin(math.radians(195))
+rev_tan_y =  math.cos(math.radians(195))
+
+# Combined path: reverse-end → start → forward-end
+with BuildLine() as arc_path:
+    ThreePointArc(
+        (rev_end_x, rev_end_y, arc_z),
+        (rev_mid_x, rev_mid_y, arc_z),
+        (980.64,    595,       arc_z),
+    )
+    ThreePointArc(
+        (980.64,    595,       arc_z),
+        (arc_mid_x, arc_mid_y, arc_z),
+        (arc_end_x, arc_end_y, arc_z),
+    )
+
+with BuildPart() as arc_cyl_body:
+    with BuildSketch(Plane(
+        origin=(rev_end_x, rev_end_y, arc_z),
+        x_dir=(0, 0, 1),
+        z_dir=(rev_tan_x, rev_tan_y, 0),
+    )):
+        Circle(47.0 / 2)
+    sweep(path=arc_path)
+    with BuildSketch(slant_plane):
+        Rectangle(500, 500)
+    extrude(amount=-150, mode=Mode.SUBTRACT)
+    fillet(arc_cyl_body.edges().filter_by(GeomType.CIRCLE).sort_by(SortBy.LENGTH)[0:1], radius=20)
+
+with BuildPart() as joined_cyl:
+    add(cyl_body.part)
+    add(arc_cyl_body.part)
+
+# Move combined cylinder: +50.07 in X, -101 in Y from current position
+with BuildPart() as joined_cyl_moved:
+    add(joined_cyl.part.moved(Location((50.07, -101, 0))))
+
+# Rotate around Z (X→Y) about the cylinder's current centre position
+cyl_cx = 980.64 + 50.07   # 1030.71
+cyl_cy = 595.0  - 101.0   # 494.0
+
+with BuildPart() as joined_cyl_rotated:
+    add(joined_cyl_moved.part.moved(
+        Location((cyl_cx, cyl_cy, 0)) *
+        Rotation(0, 0, 30) *
+        Location((-cyl_cx, -cyl_cy, 0))
+    ))
+
+# Replicate combined cylinder at 120° and 240° around centre of 244.07mm hole
+hole_cx, hole_cy = 980.64, 595.0
+
+_dx = cyl_cx - hole_cx   # 50.07
+_dy = cyl_cy - hole_cy   # -101.0
+c120_x = hole_cx + _dx * math.cos(math.radians(120)) - _dy * math.sin(math.radians(120))
+c120_y = hole_cy + _dx * math.sin(math.radians(120)) + _dy * math.cos(math.radians(120))
+c240_x = hole_cx + _dx * math.cos(math.radians(240)) - _dy * math.sin(math.radians(240))
+c240_y = hole_cy + _dx * math.sin(math.radians(240)) + _dy * math.cos(math.radians(240))
+
+with BuildPart() as cyl_replica_120:
+    add(joined_cyl_rotated.part.moved(
+        Location((c120_x, c120_y, 0)) *
+        Rotation(0, 0, 1) *
+        Location((-c120_x, -c120_y, 0)) *
+        Location((hole_cx, hole_cy, 0)) *
+        Rotation(0, 0, 120) *
+        Location((-hole_cx, -hole_cy, 0))
+    ))
+
+with BuildPart() as cyl_replica_240:
+    add(joined_cyl_rotated.part.moved(
+        Location((c240_x, c240_y, 0)) *
+        Rotation(0, 0, 1) *
+        Location((-c240_x, -c240_y, 0)) *
+        Location((hole_cx, hole_cy, 0)) *
+        Rotation(0, 0, 240) *
+        Location((-hole_cx, -hole_cy, 0))
+    ))
+
+with BuildPart() as final_body14:
+    add(final_body13.part)
+    add(joined_cyl_rotated.part, mode=Mode.SUBTRACT)
+    add(cyl_replica_120.part, mode=Mode.SUBTRACT)
+    add(cyl_replica_240.part, mode=Mode.SUBTRACT)
+
+# Profile 1 cuts: left/right face, top (z=1053.2) and mid (z=513.2), two Y positions each
+plane_left_top       = Plane(origin=(0,       725,         1053.2), x_dir=( 1, 0, 0), z_dir=(0, 1, 0))
+plane_left_top_copy  = Plane(origin=(0,       725 - 302.5, 1053.2), x_dir=( 1, 0, 0), z_dir=(0, 1, 0))
+plane_right_top      = Plane(origin=(1960.94, 725,         1053.2), x_dir=(-1, 0, 0), z_dir=(0, 1, 0))
+plane_right_top_copy = Plane(origin=(1960.94, 725 - 302.5, 1053.2), x_dir=(-1, 0, 0), z_dir=(0, 1, 0))
+
+plane_left_mid       = Plane(origin=(0,       725,         1053.2 - 540), x_dir=( 1, 0, 0), z_dir=(0, 1, 0))
+plane_left_mid_copy  = Plane(origin=(0,       725 - 302.5, 1053.2 - 540), x_dir=( 1, 0, 0), z_dir=(0, 1, 0))
+plane_right_mid      = Plane(origin=(1960.94, 725,         1053.2 - 540), x_dir=(-1, 0, 0), z_dir=(0, 1, 0))
+plane_right_mid_copy = Plane(origin=(1960.94, 725 - 302.5, 1053.2 - 540), x_dir=(-1, 0, 0), z_dir=(0, 1, 0))
+
+with BuildPart() as final_body15:
+    add(final_body14.part)
+    for plane in [plane_left_top, plane_left_top_copy, plane_left_mid, plane_left_mid_copy]:
+        with BuildSketch(plane):
+            with BuildLine():
+                Polyline(*profile_pts, close=True)
+            make_face()
+        extrude(amount=25, mode=Mode.SUBTRACT)
+    for plane in [plane_right_top, plane_right_top_copy, plane_right_mid, plane_right_mid_copy]:
+        with BuildSketch(plane):
+            with BuildLine():
+                Polyline(*profile_pts_m12, close=True)
+            make_face()
+        extrude(amount=25, mode=Mode.SUBTRACT)
+
+with BuildPart() as profile_body:
+    with BuildSketch(Plane.XY.offset(1020)):
+        with BuildLine():
+            Polyline(*profile_pts, close=True)
+        make_face()
+    extrude(amount=25)
+
+with BuildPart() as profile_body_moved:
+    add(profile_body.part.moved(Location((0, 501.82, 0))))
+
+with BuildPart() as profile_body_copy:
+    add(profile_body.part.moved(Location((0, 501.82 + 105, 0))))
+
+# Mirrored profile on right face (x=1960.94): flip X of profile points
+profile_pts_mirror = [Vector(1960.94 - p.X, p.Y) for p in profile_pts]
+
+with BuildPart() as profile_body_right:
+    with BuildSketch(Plane.XY.offset(1020)):
+        with BuildLine():
+            Polyline(*profile_pts_mirror, close=True)
+        make_face()
+    extrude(amount=25)
+
+with BuildPart() as profile_body_right_moved:
+    add(profile_body_right.part.moved(Location((0, 501.82, 0))))
+
+with BuildPart() as profile_body_right_copy:
+    add(profile_body_right.part.moved(Location((0, 501.82 + 105, 0))))
+
+with BuildPart() as final_body16:
+    add(final_body15.part)
+    add(profile_body_moved.part,       mode=Mode.SUBTRACT)
+    add(profile_body_copy.part,        mode=Mode.SUBTRACT)
+    add(profile_body_right_moved.part, mode=Mode.SUBTRACT)
+    add(profile_body_right_copy.part,  mode=Mode.SUBTRACT)
+
+with BuildPart() as final_body17:
+    add(final_body16.part)
+    with BuildSketch(Plane.XY.offset(1070)):
+        with Locations((50, 535), (50, 640), (1910.94, 535), (1910.94, 640)):
+            Circle(35.0 / 2)
+    extrude(amount=-24, mode=Mode.SUBTRACT)
+
+# Separate box: 38mm (X) x 367.5mm (Y) x 40mm (Z), corner at origin then moved
+with BuildPart() as box_top_raw:
+    Box(38, 367.5, 40, align=(Align.MIN, Align.MIN, Align.MIN))
+
+with BuildPart() as box_top:
+    add(box_top_raw.part.moved(Location((100, 422.5, 1032))))
+
+with BuildPart() as box_top_mirror:
+    add(box_top_raw.part.moved(Location((1960.94 - 100 - 38, 422.5, 1032))))
+
+with BuildPart() as final_body18:
+    add(final_body17.part)
+    add(box_top.part,        mode=Mode.SUBTRACT)
+    add(box_top_mirror.part, mode=Mode.SUBTRACT)
+
+front_hole_plane = Plane(origin=(0, 0, 0), x_dir=(1, 0, 0), z_dir=(0, 1, 0))
+front_holes = [(294.98, 425), (754.98, 425), (1205.96, 425), (1664.10, 425)]
+
+with BuildPart() as final_body19:
+    add(final_body18.part)
+    with BuildSketch(front_hole_plane):
+        for cx, cz in front_holes:
+            with Locations((cx, -cz)):
+                Circle(100.0 / 2)
+    extrude(amount=55, mode=Mode.SUBTRACT)
+
+# Text emboss on front face (y=0), outward in -Y direction
+text_plane = Plane(origin=(50, 0, 200), x_dir=(1, 0, 0), z_dir=(0, -1, 0))
+
+with BuildPart() as final_body20:
+    add(final_body19.part)
+    def spaced(txt): return " ".join(txt)
+
+    with BuildSketch(text_plane):
+        with Locations((0, 103.359375)):
+            Text(spaced("Designed by Philip Dettinger"), font_size=69.3,
+                 text_align=(TextAlign.LEFT, TextAlign.CENTER))
+        with Locations((0, 0)):
+            Text(spaced("Cell System Dyanmics Group"), font_size=69.3,
+                 text_align=(TextAlign.LEFT, TextAlign.CENTER))
+        with Locations((0, -103.359375)):
+            Text(spaced("ETH Zurich"), font_size=69.3,
+                 text_align=(TextAlign.LEFT, TextAlign.CENTER))
+    extrude(amount=-6, mode=Mode.SUBTRACT)
+
+# "Right" text on back face (y=790), facing outward (+Y), running along +Z axis
+back_text_plane = Plane(origin=(1460.96, 422.5, 750), x_dir=(0, 0, 1), z_dir=(0, 1, 0))
+
+with BuildPart() as right_text_body:
+    with BuildSketch(back_text_plane):
+        Text("RIGHT", font_size=69.3, text_align=(TextAlign.LEFT, TextAlign.BOTTOM))
+    extrude(amount=-3)
+
+left_text_plane = Plane(origin=(449.96, 422.5, 750), x_dir=(0, 0, 1), z_dir=(0, 1, 0))
+
+with BuildPart() as left_text_body:
+    with BuildSketch(left_text_plane):
+        Text("LEFT", font_size=69.3, text_align=(TextAlign.LEFT, TextAlign.BOTTOM))
+    extrude(amount=-3)
+
+with BuildPart() as final_body21:
+    add(final_body20.part)
+    add(right_text_body.part, mode=Mode.SUBTRACT)
+    add(left_text_body.part,  mode=Mode.SUBTRACT)
+
+show(
+    final_body21,
+    names=["Final Body"],
+    colors=["#5588AA"],
 )
 
-mirror_plane = Plane(origin=(LENGTH / 2, 0, 0), x_dir=(0, 1, 0), z_dir=(1, 0, 0))
-slot_left = slot_right.mirror(mirror_plane)
-
-# ---------------------------------------------------------------------------
-# Main body — all operations
-# ---------------------------------------------------------------------------
-with BuildPart() as part:
-
-    # Step 1 — solid outer box
-    Box(LENGTH, WIDTH, HEIGHT,
-        align=(Align.MIN, Align.MIN, Align.MIN))
-
-    # Step 2 — hollow out (open left/right/bottom, keep front/back/top)
-    with Locations((0, T, 0)):
-        Box(LENGTH, WIDTH - 2 * T, HEIGHT - T,
-            align=(Align.MIN, Align.MIN, Align.MIN),
-            mode=Mode.SUBTRACT)
-
-    # Step 3 — extrude cut 1 (centred rectangular slot)
-    with Locations((cut1_x, cut1_y, 0)):
-        Box(CUT1_LEN, CUT1_WID, HEIGHT,
-            align=(Align.MIN, Align.MIN, Align.MIN),
-            mode=Mode.SUBTRACT)
-
-    # Step 4 — extrude cut 2 (front wall slot, centred in X)
-    with Locations((cut2_x, cut2_y, 0)):
-        Box(CUT2_LEN, CUT2_WID, HEIGHT,
-            align=(Align.MIN, Align.MIN, Align.MIN),
-            mode=Mode.SUBTRACT)
-
-    # Step 5 — slot cut right (back face)
-    add(slot_right, mode=Mode.SUBTRACT)
-
-    # Step 6 — slot cut left (mirrored, back face)
-    add(slot_left, mode=Mode.SUBTRACT)
-
-    # Step 7 — rectangular cut on top face
-    with Locations((tab_ox, tab_oy, tab_oz)):
-        Box(TAB_X, TAB_Y, TAB_Z,
-            align=(Align.MIN, Align.MIN, Align.MIN),
-            mode=Mode.SUBTRACT)
-
-    # Step 8 — circular hole through top wall
-    with BuildSketch(Plane(origin=(HOLE_CX, HOLE_CY, HEIGHT),
-                           x_dir=(1, 0, 0), z_dir=(0, 0, 1))) as hole_sk:
-        Circle(HOLE_R)
-    extrude(hole_sk.sketch, amount=-T, mode=Mode.SUBTRACT)
-
-    # Step 8b — counterbore dia 370mm, depth 23.5mm, cut from bottom of top face
-    #   Same centre as the 233.47mm hole: X=294.99, Y=320.38
-    #   Z: HEIGHT-T+23.5 = 346.0 down to HEIGHT-T = 322.5
-    with BuildSketch(Plane(origin=(HOLE_CX, HOLE_CY, HEIGHT - T + 23.5),
-                           x_dir=(1, 0, 0), z_dir=(0, 0, 1))) as cb_sk:
-        Circle(185.0)   # radius = 370/2 = 185 mm
-    extrude(cb_sk.sketch, amount=-23.5, mode=Mode.SUBTRACT)
-
-    # Step 8b mirror — same cut mirrored to right side (X = LENGTH - HOLE_CX = 1665.95)
-    with BuildSketch(Plane(origin=(LENGTH - HOLE_CX, HOLE_CY, HEIGHT - T + 23.5),
-                           x_dir=(1, 0, 0), z_dir=(0, 0, 1))) as cb_m_sk:
-        Circle(185.0)
-    extrude(cb_m_sk.sketch, amount=-23.5, mode=Mode.SUBTRACT)
-
-    # Step 9 — 4 holes (dia 35 mm) on top face, through full top wall (50 mm)
-    #   Centres: (140, 165.39), (449.99, 165.39), (140, 475.37), (449.99, 475.37)
-    H4_D = 35.00
-    H4_R = H4_D / 2   # 17.5 mm
-    H4_CENTRES = [
-        (140.00, 165.39),
-        (449.99, 165.39),
-        (140.00, 475.37),
-        (449.99, 475.37),
-    ]
-    for hx, hy in H4_CENTRES:
-        with BuildSketch(Plane(origin=(hx, hy, HEIGHT),
-                               x_dir=(1, 0, 0), z_dir=(0, 0, 1))) as h4_sk:
-            Circle(H4_R)
-        extrude(h4_sk.sketch, amount=-T, mode=Mode.SUBTRACT)
-
-    # Step 9b — true 45° conical countersink on the 4 step-9 holes
-    #   Slant edge = 24mm, each side = 24/sqrt(2) ≈ 16.97mm
-    #   Z top of cone = HEIGHT - T + 17 = 339.5mm
-    #   Built by revolving a right-triangle profile 360° around hole axis
-    _H4_SIDE = 24.0 / 2**0.5   # 16.97 mm
-    _z_top   = HEIGHT - T + 17  # 339.5 mm
-    for hx, hy in H4_CENTRES:
-        with BuildSketch(Plane(origin=(hx, hy, 0),
-                               x_dir=(1, 0, 0), z_dir=(0, 0, 1))) as _cs_sk:
-            with BuildLine():
-                Line((H4_R,          _z_top),           (H4_R + _H4_SIDE, _z_top))
-                Line((H4_R + _H4_SIDE, _z_top),         (H4_R,            _z_top - _H4_SIDE))
-                Line((H4_R,          _z_top - _H4_SIDE), (H4_R,           _z_top))
-            make_face()
-        revolve(_cs_sk.sketch, axis=Axis((hx, hy, 0), (0, 0, 1)),
-                revolution_arc=360, mode=Mode.SUBTRACT)
-
-    # Step 10 — mirror steps 7, 8, 9 onto the top right face
-    # Mirror plane: perpendicular to X, passing through X = LENGTH/2
-    top_mirror = Plane(origin=(LENGTH / 2, 0, 0), x_dir=(0, 1, 0), z_dir=(1, 0, 0))
-
-    # Mirror step 7 — rectangular cut
-    tab_mx = LENGTH - tab_ox - TAB_X   # mirrored X corner = 1960.94 - 50 - 60 = 1850.94
-    with Locations((tab_mx, tab_oy, tab_oz)):
-        Box(TAB_X, TAB_Y, TAB_Z,
-            align=(Align.MIN, Align.MIN, Align.MIN),
-            mode=Mode.SUBTRACT)
-
-    # Mirror step 8 — large circular hole
-    hole_mx = LENGTH - HOLE_CX         # mirrored centre X = 1960.94 - 294.99 = 1665.95
-    with BuildSketch(Plane(origin=(hole_mx, HOLE_CY, HEIGHT),
-                           x_dir=(1, 0, 0), z_dir=(0, 0, 1))) as hole_m_sk:
-        Circle(HOLE_R)
-    extrude(hole_m_sk.sketch, amount=-T, mode=Mode.SUBTRACT)
-
-    # Mirror step 9 — 4 small holes
-    for hx, hy in H4_CENTRES:
-        hx_m = LENGTH - hx             # mirror X about LENGTH/2
-        with BuildSketch(Plane(origin=(hx_m, hy, HEIGHT),
-                               x_dir=(1, 0, 0), z_dir=(0, 0, 1))) as h4m_sk:
-            Circle(H4_R)
-        extrude(h4m_sk.sketch, amount=-T, mode=Mode.SUBTRACT)
-
-# ---------------------------------------------------------------------------
-# Summary
-# ---------------------------------------------------------------------------
-bb = part.part.bounding_box()
-slot_l_cx = LENGTH - slot_r_cx
-print("=== Final body ===")
-print(f"  X : {bb.min.X:.3f}  ->  {bb.max.X:.3f}")
-print(f"  Y : {bb.min.Y:.3f}  ->  {bb.max.Y:.3f}")
-print(f"  Z : {bb.min.Z:.3f}  ->  {bb.max.Z:.3f}")
-print(f"  Faces : {len(part.faces())}")
-print(f"\nStep 2  Hollow          : wall/top T={T} mm")
-print(f"Step 3  Cut 1           : {CUT1_LEN} x {CUT1_WID} x {HEIGHT} mm, centred")
-print(f"Step 4  Cut 2           : {CUT2_LEN} x {CUT2_WID} x {HEIGHT} mm, front wall")
-print(f"Step 5  Slot right      : centre X={slot_r_cx:.3f}, Z={slot_cz:.3f}")
-print(f"Step 6  Slot left       : centre X={slot_l_cx:.3f}, Z={slot_cz:.3f}")
-print(f"Step 7  Boss            : {TAB_X}x{TAB_Y}x{TAB_Z} mm @ ({tab_ox},{tab_oy},{tab_oz:.1f})")
-print(f"Step 8  Hole (top face) : dia={HOLE_D} mm, centre ({HOLE_CX},{HOLE_CY})")
-print(f"Step 9  4x holes        : dia=35 mm at (140,165.39),(449.99,165.39),(140,475.37),(449.99,475.37)")
-print(f"Step 10 Mirror (right)  : steps 7,8,9 mirrored about X={LENGTH/2:.2f} mm")
-print(f"Corner posts            : 4x (front-left, front-right, back-left, back-right)")
-print(f"Deep holes (dia 70mm)   : 4x centres ({49.98},{49.99}), ({LENGTH-49.98:.2f},{49.99}), ({49.98},{WIDTH-49.99:.2f}), ({LENGTH-49.98:.2f},{WIDTH-49.99:.2f})")
-
-# ---------------------------------------------------------------------------
-# Body 2 — corner post: 100mm(X) x 50mm(Y) x 322.5mm(Z), fillet r=50 on far corner
-# Placed at front-left corner: X=0, Y=0, Z=0
-# ---------------------------------------------------------------------------
-POST_X = 100.00   # mm along X
-POST_Y =  50.00   # mm along Y
-POST_Z = 322.50   # mm height
-
-# Profile: 100x50 rectangle with a 50mm quarter-circle fillet on the far corner
-# Body sits at X=0->100, Y=50->100 (shifted +50 in Y)
-# Far corner (diagonal from origin) = (X=100, Y=100)
-# Arc from (100,50) to (50,100) with r=50, centre at (50,50)
-with BuildPart() as body2:
-    with BuildSketch(Plane.XY) as _post_sk:
-        with BuildLine():
-            Line((0, 50), (100, 50))           # bottom edge
-            RadiusArc((100, 50), (50, 100), radius=-50) # quarter-circle fillet r=50, bulges outward
-            Line((50, 100), (0, 100))          # top edge
-            Line((0, 100), (0, 50))            # left edge
-        make_face()
-    extrude(_post_sk.sketch, amount=POST_Z)
-
-# ---------------------------------------------------------------------------
-# Combine Body 1 and Body 2 into a single body (union)
-# ---------------------------------------------------------------------------
-
-# Mirror planes
-_mirror_plane_x = Plane(origin=(LENGTH / 2, 0, 0), x_dir=(0, 1, 0), z_dir=(1, 0, 0))
-_mirror_plane_y = Plane(origin=(0, WIDTH / 2, 0), x_dir=(1, 0, 0), z_dir=(0, 1, 0))
-
-# Front-left body2, front-right (X mirror), back-left (Y mirror), back-right (XY mirror)
-body2_right  = body2.part.mirror(_mirror_plane_x)
-body2_back_l = body2.part.mirror(_mirror_plane_y)
-body2_back_r = body2_right.mirror(_mirror_plane_y)
-
-# Hole centres:
-#   front-left  : (49.98,       49.99)
-#   front-right : (LENGTH-49.98, 49.99)
-#   back-left   : (49.98,       WIDTH-49.99)
-#   back-right  : (LENGTH-49.98, WIDTH-49.99)
-_hl_x = 49.98;         _hl_y = 49.99
-_hr_x = LENGTH - 49.98; _hr_y = 49.99
-_bl_x = 49.98;          _bl_y = WIDTH - 49.99
-_br_x = LENGTH - 49.98; _br_y = WIDTH - 49.99
-
-with part:
-    # Union all four corner posts
-    add(body2.part,   mode=Mode.ADD)   # front-left
-    add(body2_right,  mode=Mode.ADD)   # front-right
-    add(body2_back_l, mode=Mode.ADD)   # back-left
-    add(body2_back_r, mode=Mode.ADD)   # back-right
-
-    # Deep holes (dia 70mm, depth 322.5mm) at all four corners
-    for _hx, _hy in [(_hl_x, _hl_y), (_hr_x, _hr_y), (_bl_x, _bl_y), (_br_x, _br_y)]:
-        with BuildSketch(Plane(origin=(_hx, _hy, HEIGHT),
-                               x_dir=(1, 0, 0), z_dir=(0, 0, 1))) as _dh_sk:
-            Circle(35.0)
-        extrude(_dh_sk.sketch, amount=-322.5, mode=Mode.SUBTRACT)
-
-    # Step 12 — 35mm dia through-holes at same centres as the 70mm cylinders, full height
-    for _hx, _hy in [(_hl_x, _hl_y), (_hr_x, _hr_y), (_bl_x, _bl_y), (_br_x, _br_y)]:
-        with BuildSketch(Plane(origin=(_hx, _hy, HEIGHT),
-                               x_dir=(1, 0, 0), z_dir=(0, 0, 1))) as _sh_sk:
-            Circle(17.5)   # radius = 35/2 = 17.5 mm
-        extrude(_sh_sk.sketch, amount=-HEIGHT, mode=Mode.SUBTRACT)
-
-bb_final = part.part.bounding_box()
-print("\n=== Combined body (Body 1 + Body 2) ===")
-print(f"  X : {bb_final.min.X:.3f}  ->  {bb_final.max.X:.3f}")
-print(f"  Y : {bb_final.min.Y:.3f}  ->  {bb_final.max.Y:.3f}")
-print(f"  Z : {bb_final.min.Z:.3f}  ->  {bb_final.max.Z:.3f}")
-print(f"  Faces : {len(part.faces())}")
-
-# ---------------------------------------------------------------------------
-# Body 3 — chamfer cones as separate solid body
-#   4x hollow cone frustums (annular rings) on top edges of the 4 step-9 holes
-#   Slant = 15mm, each side = 15/sqrt(2) ≈ 10.607mm
-#   Bottom (wide): r = H4_R + side, at Z = HEIGHT - side = 361.893mm
-#   Top   (narrow): r = H4_R,       at Z = HEIGHT = 372.5mm
-# ---------------------------------------------------------------------------
-_TOP_SLANT = 24.0
-_TOP_SIDE  = _TOP_SLANT / 2**0.5   # 16.971 mm
-
-# Apply chamfer cuts directly into the main body (part)
-with part:
-    for hx, hy in [
-        (140.00, 165.39), (449.99, 165.39),
-        (140.00, 475.37), (449.99, 475.37),
-    ]:
-        # Cone frustum cut — slant=24mm, shifted to Z=322.429->339.4
-        with Locations((hx, hy, HEIGHT - _TOP_SIDE - 50 + 16.9)):
-            Cone(bottom_radius=H4_R + _TOP_SIDE, top_radius=H4_R,
-                 height=_TOP_SIDE,
-                 align=(Align.CENTER, Align.CENTER, Align.MIN),
-                 mode=Mode.SUBTRACT)
-
-    # Mirror chamfer cuts on the right side (X = LENGTH - hx)
-    for hx, hy in [
-        (140.00, 165.39), (449.99, 165.39),
-        (140.00, 475.37), (449.99, 475.37),
-    ]:
-        with Locations((LENGTH - hx, hy, HEIGHT - _TOP_SIDE - 50 + 16.9)):
-            Cone(bottom_radius=H4_R + _TOP_SIDE, top_radius=H4_R,
-                 height=_TOP_SIDE,
-                 align=(Align.CENTER, Align.CENTER, Align.MIN),
-                 mode=Mode.SUBTRACT)
-
-# ---------------------------------------------------------------------------
-# Left face hole — dia 15mm, centre Y=325, Z=347.5, depth 55mm in +X direction
-# ---------------------------------------------------------------------------
-with part:
-    # Plane on left face (X=0), normal pointing +X to drill into body
-    # Hole 1: Y=325, Z=347.5
-    with BuildSketch(Plane(origin=(0, 325, 347.5),
-                           x_dir=(0, 1, 0), z_dir=(1, 0, 0))) as _lh_sk:
-        Circle(7.5)   # radius = 15/2 = 7.5 mm
-    extrude(_lh_sk.sketch, amount=55, mode=Mode.SUBTRACT)
-
-    # Hole 2: Y=256.02, Z=347.5
-    with BuildSketch(Plane(origin=(0, 256.02, 347.5),
-                           x_dir=(0, 1, 0), z_dir=(1, 0, 0))) as _lh2_sk:
-        Circle(7.5)
-    extrude(_lh2_sk.sketch, amount=55, mode=Mode.SUBTRACT)
-
-    # Mirror holes on right face (X=LENGTH), drilling 55mm inward in -X direction
-    # z_dir=(-1,0,0) so normal points -X (into the body from right face)
-    for cy in [325, 256.02]:
-        with BuildSketch(Plane(origin=(LENGTH, cy, 347.5),
-                               x_dir=(0, 1, 0), z_dir=(-1, 0, 0))) as _rh_sk:
-            Circle(7.5)
-        extrude(_rh_sk.sketch, amount=55, mode=Mode.SUBTRACT)
-
-
-
-# ---------------------------------------------------------------------------
-# 'Z1' emboss cut — text engraved 10mm deep into top face
-#   Centre  : X=319.32, Y=525.26
-#   Depth   : 10 mm downward from top face (Z=372.5 -> Z=362.5)
-# ---------------------------------------------------------------------------
-_txt_cx = 319.32   # mm  centre X
-_txt_cy = 525.26   # mm  centre Y
-
-with part:
-    # Z1 emboss cut (left side)
-    with BuildSketch(Plane(origin=(_txt_cx, _txt_cy, HEIGHT),
-                           x_dir=(1, 0, 0), z_dir=(0, 0, 1))) as _txt_sk:
-        Text('Z1', font_size=100, font='Arial', font_style=FontStyle.BOLD,
-             text_align=(TextAlign.CENTER, TextAlign.CENTER))
-    extrude(_txt_sk.sketch, amount=-10, mode=Mode.SUBTRACT)
-
-    # Z2 emboss cut — mirrored to right side (X = LENGTH - _txt_cx)
-    _txt2_cx = LENGTH - _txt_cx   # 1960.94 - 319.32 = 1641.62 mm
-    with BuildSketch(Plane(origin=(_txt2_cx, _txt_cy, HEIGHT),
-                           x_dir=(1, 0, 0), z_dir=(0, 0, 1))) as _txt2_sk:
-        Text('Z2', font_size=100, font='Arial', font_style=FontStyle.BOLD,
-             text_align=(TextAlign.CENTER, TextAlign.CENTER))
-    extrude(_txt2_sk.sketch, amount=-10, mode=Mode.SUBTRACT)
-
-print(f"\nZ1 emboss cut: centre ({_txt_cx}, {_txt_cy}), depth 10mm")
-print(f"Z2 emboss cut: centre ({LENGTH - _txt_cx:.2f}, {_txt_cy}), depth 10mm")
-
-# ---------------------------------------------------------------------------
-# OCP CAD Viewer
-# ---------------------------------------------------------------------------
-try:
-    from ocp_vscode import show, set_defaults, Camera
-
-    set_defaults(
-        axes=True,
-        axes0=True,
-        grid=(True, True, True),
-        transparent=False,
-        ambient_intensity=1.0,
-        direct_intensity=1.1,
-    )
-
-    show(
-        part,
-        names=["Combined Body"],
-        colors=["#5588AA"],
-        alphas=[1.0],
-        reset_camera=Camera.RESET,
-    )
-    print("\n✅ Model sent to OCP CAD Viewer.")
-
-except RuntimeError as e:
-    print("\n⚠️  OCP CAD Viewer is not running.")
-    print("    -> Cmd/Ctrl+Shift+P  ->  'OCP CAD Viewer: Open Viewer'")
-    print("    -> Wait for the 3D panel, then re-run.\n")
-    print(f"    (Error: {e})")
-
-except ImportError:
-    print("\n⚠️  ocp-vscode not installed.  Run:  pip install ocp-vscode")
-
-# ---------------------------------------------------------------------------
-# Export — popup dialog asks for STEP file save location every run
-# ---------------------------------------------------------------------------
+# ─────────────────────────────────────────────────────────────────────────────
+# STEP + STL Export — pop-up dialog to choose save location
+# ─────────────────────────────────────────────────────────────────────────────
 import tkinter as tk
 from tkinter import filedialog
 import os
 
-def ask_export_path(default_name="combined_body.step"):
-    """Open a save-file dialog and return the chosen path, or None if cancelled."""
-    root = tk.Tk()
-    root.withdraw()                      # hide the empty root window
-    root.attributes("-topmost", True)    # bring dialog to front
-    path_chosen = filedialog.asksaveasfilename(
-        title="Save STEP file",
-        defaultextension=".step",
-        filetypes=[("STEP files", "*.step *.stp"), ("All files", "*.*")],
-        initialfile=default_name,
-        initialdir=os.path.expanduser("~"),
-    )
-    root.destroy()
-    return path_chosen if path_chosen else None
+root = tk.Tk()
+root.withdraw()
+root.attributes("-topmost", True)
+export_path = filedialog.asksaveasfilename(
+    title="Export STEP file",
+    defaultextension=".step",
+    filetypes=[("STEP files", "*.step *.stp"), ("All files", "*.*")],
+    initialfile="Body.step",
+)
+root.destroy()
 
-step_path = ask_export_path("combined_body.step")
+if export_path:
+    # ── STEP export ──────────────────────────────────────────────────────────
+    export_step(final_body21.part, export_path)
+    print(f"STEP exported to: {export_path}")
 
-if step_path:
-    export_step(part.part, step_path)
-    print(f"\n✅ Exported STEP: {step_path}")
+    # ── STL export — same folder, same base name ─────────────────────────────
+    stl_path = os.path.splitext(export_path)[0] + ".stl"
+    export_stl(final_body21.part, stl_path)
+    print(f"STL  exported to: {stl_path}")
 else:
-    print("\n⚠️  Export cancelled — no file saved.")
+    print("Export cancelled.")
