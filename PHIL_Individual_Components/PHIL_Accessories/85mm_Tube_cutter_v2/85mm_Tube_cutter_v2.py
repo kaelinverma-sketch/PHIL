@@ -15,7 +15,7 @@ Body 1 - Main body:
   Fillet  6mm: slot1 upper right edge (max safe)
   Fillet  4mm: pocket_exit_top_x  (max safe; requested 8mm — limited by 10mm slot end cap)
   Fillet  8mm: pocket_entry_top_x
-  Fillet  8mm: pocket_entry_floor_x, pocket_exit_floor_x
+  Fillet auto: pocket_entry_floor_x, pocket_exit_floor_x (max_fillet, capped at 8mm)
 """
 
 from build123d import *
@@ -84,16 +84,19 @@ with BuildPart() as body1:
     pocket_entry_top_x = edges.filter_by_position(Axis.Y, 842.4, 842.6).filter_by_position(Axis.Z, 99.9, 100.1)
     fillet(pocket_entry_top_x, radius=8)
 
-    # Fillet 8: pocket entry floor edge — 8mm
+    # Fillet 8: pocket entry floor edge — auto (max_fillet, capped at 8mm)
     edges = body1.part.edges()
     pocket_entry_floor_x = edges.filter_by_position(Axis.Y, 842.4, 842.6).filter_by_position(Axis.Z, 19.9, 20.1)
-    fillet(pocket_entry_floor_x, radius=8)
+    r8 = min(8, body1.part.max_fillet(pocket_entry_floor_x, tolerance=0.5, max_iterations=20))
+    print(f"Fillet 8 (pocket_entry_floor_x) radius: {r8:.3f} mm")
+    fillet(pocket_entry_floor_x, radius=r8)
 
-    # Fillet 9: pocket exit floor edge — 8mm
+    # Fillet 9: pocket exit floor edge — auto (max_fillet, capped at 8mm)
     edges = body1.part.edges()
     pocket_exit_floor_x = edges.filter_by_position(Axis.Y, 862.4, 862.6).filter_by_position(Axis.Z, 19.9, 20.1)
-    fillet(pocket_exit_floor_x, radius=8)
-
+    r9 = min(8, body1.part.max_fillet(pocket_exit_floor_x, tolerance=0.5, max_iterations=20))
+    print(f"Fillet 9 (pocket_exit_floor_x)  radius: {r9:.3f} mm")
+    fillet(pocket_exit_floor_x, radius=r9)
 
     # Fillet 10: hole arc at y=842.5 — 10mm
     edges = body1.part.edges()
@@ -109,9 +112,12 @@ with BuildPart() as body1:
 
 show(body1, axes=True, axes0=True, grid=(True, True, True), transparent=False)
 
-# Export to STEP — ask user for save location via file dialog
+# ---------------------------------------------------------------------------
+# STEP + STL Export — pop-up dialog to choose save location
+# ---------------------------------------------------------------------------
 import tkinter as tk
 from tkinter import filedialog
+import os
 
 root = tk.Tk()
 root.withdraw()
@@ -126,7 +132,13 @@ export_path = filedialog.asksaveasfilename(
 root.destroy()
 
 if export_path:
+    # ── STEP export ──────────────────────────────────────────────────────────
     export_step(body1.part, export_path)
     print(f"STEP exported to: {export_path}")
+
+    # ── STL export — same folder, same base name ─────────────────────────────
+    stl_path = os.path.splitext(export_path)[0] + ".stl"
+    export_stl(body1.part, stl_path)
+    print(f"STL  exported to: {stl_path}")
 else:
     print("Export cancelled.")
