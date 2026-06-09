@@ -15,7 +15,6 @@ from ocp_vscode import show_object
 _HERE = os.path.dirname(os.path.abspath(__file__))
 
 # ── 1. Path ───────────────────────────────────────────────────────────────────
-# Start at origin, go +X 454.65, then -Y 1200, then -X 454.65
 path_points = [
     (0.0,     0.0,    0.0),
     (454.65,  0.0,    0.0),
@@ -29,8 +28,6 @@ sweep_path = bl.wire()
 print(f"Path: {len(sweep_path.edges())} edges | length ≈ {sweep_path.length:.1f} mm")
 
 # ── 2. Profile face — 100x100 rectangle ──────────────────────────────────────
-# Path starts at origin going in +X direction → profile normal = +X
-# Plane: origin = path start, x_dir = +Y, z_dir = +X (normal)
 profile_plane = Plane(
     origin = Vector(*path_points[0]),
     x_dir  = Vector(0, 1, 0),
@@ -50,8 +47,7 @@ with BuildPart() as part:
 solid = part.solid()
 print(f"Solid: valid={solid.is_valid} | faces={len(solid.faces())} | volume ≈ {abs(solid.volume)/1e6:.2f} cm³")
 
-# ── 4. Fillet inner Z edge — 50mm at x=404.65, y=-50 ────────────────────────
-# Inner concave corner of the bend facing -Y direction
+# ── 4. Fillet inner Z edge — 50mm ────────────────────────────────────────────
 from build123d import ShapeList
 inner_z_edges = ShapeList([e for e in solid.edges()
     if abs(e.bounding_box().min.X - 404.65) < 1.0
@@ -63,8 +59,7 @@ inner_z_edges = ShapeList([e for e in solid.edges()
 solid = solid.fillet(50, inner_z_edges)
 print(f"After fillet: valid={solid.is_valid} | faces={len(solid.faces())}")
 
-# ── 4. Cylinder at origin, diameter=135mm, extruded 100mm in +Y ──────────────
-# Sketch on XZ plane (normal=+Y), extrude in +Y direction
+# ── Cylinder at origin ────────────────────────────────────────────────────────
 with BuildPart() as cyl_part:
     with BuildSketch(Plane.XZ):
         Circle(67.5)
@@ -87,13 +82,12 @@ x_and_arc = ShapeList([e for e in solid.edges() if get_axis(e) in ('X', 'Arc')])
 solid = solid.fillet(30, x_and_arc)
 print(f"After 30mm fillet on X+Arc edges: valid={solid.is_valid} | faces={len(solid.faces())}")
 
-# ── Fillet 1240mm Y edges — 49.9mm (r=50 is geometrically impossible on 100mm profile) ──
 edges_1240 = ShapeList([e for e in solid.edges()
     if get_axis(e) == 'Y' and abs(e.length - 1240.0) < 1.0])
 solid = solid.fillet(49.9, edges_1240)
 print(f"After 49.9mm fillet on 1240mm Y edges: valid={solid.is_valid} | faces={len(solid.faces())}")
 
-# ── Base extrude from extrude.txt — 25mm in +Z ───────────────────────────────
+# ── Base extrude ──────────────────────────────────────────────────────────────
 extrude_points = [
     (19.0625, 50.0, -134.9943), (19.0625, -50.0, -134.9943),
     (546.6797, 50.0, -134.9943), (546.6797, -1250.0, -134.9943),
@@ -115,7 +109,6 @@ extrude_points = [
     (416.3281, -52.4414, -134.9943), (411.25, -51.0938, -134.9943),
     (406.0938, -50.2734, -134.9943), (400.8594, -50.0, -134.9943),
 ]
-# Reorder into a closed polygon: outer boundary then inner cutout edge back
 ordered_pts = ([extrude_points[0], extrude_points[2], extrude_points[3],
                 extrude_points[4], extrude_points[5]] + extrude_points[6:] + [extrude_points[1]])
 
@@ -131,21 +124,13 @@ print(f"Base: valid={base_solid.is_valid} | faces={len(base_solid.faces())} | Z=
 
 cylinder = cylinder.translate(Vector(-45.32, 50, 0))
 
-# ── Hole through cylinder centre — diameter 29.95mm ───────────────────────────
-# Cylinder centre axis at X=-45.32, Z=0, running along Y
-# Drill through full Y extent (-50 to 50) plus margin
 hole_plane = Plane(origin=Vector(-45.32, -60, 0), x_dir=Vector(1, 0, 0), z_dir=Vector(0, -1, 0))
 with BuildPart() as hole_part:
     with BuildSketch(hole_plane):
         Circle(29.95 / 2)
-    extrude(amount=120)  # longer than cylinder height to ensure full cut
+    extrude(amount=120)
 hole_tool = hole_part.solid()
-# Cut applied to handle after fuse (see below)
 
-
-
-# ── Hole body — 29.95mm diameter through cylinder centre ─────────────────────
-# Cylinder centre: X=-45.32, Z=0, Y=-50..50 (after translation)
 with BuildPart() as hole_body_part:
     with BuildSketch(Plane(origin=Vector(-45.32, -50, 0), x_dir=Vector(1, 0, 0), z_dir=Vector(0, 1, 0))):
         Circle(29.95 / 2)
@@ -153,22 +138,15 @@ with BuildPart() as hole_body_part:
 hole_body = hole_body_part.solid()
 print(f"Hole body: valid={hole_body.is_valid} | BB={hole_body.bounding_box()}")
 
-# Remove old hole cut and redo using hole_body as the cut tool on handle
-# (replaces the earlier cylinder.cut — handle is built after this point so we store hole_body for later)
-
-# Mirror cylinder to the other end of the sweep (about Y=-600 midplane)
 mirror_plane = Plane(origin=Vector(0, -600, 0), x_dir=Vector(1, 0, 0), z_dir=Vector(0, 1, 0))
 cylinder_mirrored = mirror(cylinder, about=mirror_plane)
 
-# ── 6. Join all bodies into one Handle, then cut hole ───────────────────────
-# Mirror hole to the other cylinder end (same mirror plane as cylinder_mirrored)
 hole_body_mirrored = mirror(hole_body, about=mirror_plane)
 
 handle = solid.fuse(cylinder).fuse(cylinder_mirrored)
 handle = handle.cut(hole_body).cut(hole_body_mirrored)
 print(f"Handle: valid={handle.is_valid} | faces={len(handle.faces())}")
 
-# ── New extrude from extrude.txt (second file) — 100mm in -Y ────────────────
 extrude_pts2 = [
     (-66.6406, -1250.0, -109.9943), (-66.6406, -1250.0, -134.9943),
     (-17.6562, -1250.0, -134.9943), (-54.7656, -1250.0, -109.9943),
@@ -189,48 +167,44 @@ with BuildPart() as part2:
 extrude_solid2 = part2.solid()
 print(f"Extrude2: valid={extrude_solid2.is_valid} | faces={len(extrude_solid2.faces())}")
 
-# ── 7. Display ────────────────────────────────────────────────────────────────
 handle_copy = handle.translate(Vector(0, 0, -2.45))
 
 base_solid = base_solid.translate(Vector(-46.209, 0, 67.494))
 base_cut = base_solid.cut(handle_copy)
 print(f"Base cut: valid={base_cut.is_valid} | faces={len(base_cut.faces())}")
 
-# ── Ask export paths BEFORE displaying (show_object blocks on macOS) ────────
-import subprocess, sys
-from build123d import export_step
-
-def ask_save_path(title, default_name):
-    if sys.platform == "darwin":
-        script = f'''
-tell application "Finder" to activate
-set filePath to POSIX path of (choose file name with prompt "{title}" default name "{default_name}" default location (path to desktop))
-return filePath
-        '''
-        result = subprocess.run(["osascript", "-e", script], capture_output=True, text=True)
-        path = result.stdout.strip()
-        if path and not path.endswith((".step", ".stp")):
-            path += ".step"
-        return path or None
-    else:
-        result = subprocess.run(
-            ["zenity", "--file-selection", "--save",
-             f"--title={title}", f"--filename={default_name}",
-             "--file-filter=STEP files | *.step *.stp"],
-            capture_output=True, text=True)
-        return result.stdout.strip() or None
-
-path_export = ask_save_path("Save All Bodies as STEP", "model.step")
-
-show_object(handle,   name="Handle",   options={"color": (52,  152, 219), "alpha": 1.0}, clear=True)
-show_object(base_cut,      name="Base_cut",    options={"color": (46,  204, 113), "alpha": 1.0})
 extrude_solid2 = extrude_solid2.translate(Vector(-46.206, 0, 67.494))
-show_object(extrude_solid2, name="Extrude_body", options={"color": (243, 156,  18), "alpha": 1.0})
 
-# ── Export all 3 bodies in one STEP file ─────────────────────────────────────
-if path_export:
+show_object(handle,        name="Handle",       options={"color": (52,  152, 219), "alpha": 1.0}, clear=True)
+show_object(base_cut,      name="Base_cut",     options={"color": (46,  204, 113), "alpha": 1.0})
+show_object(extrude_solid2,name="Extrude_body", options={"color": (243, 156,  18), "alpha": 1.0})
+
+# ── STEP + STL Export — pop-up file dialog ───────────────────────────────────
+import tkinter as tk
+from tkinter import filedialog
+
+root = tk.Tk()
+root.withdraw()
+root.attributes("-topmost", True)
+
+export_path = filedialog.asksaveasfilename(
+    title="Save STEP file",
+    defaultextension=".step",
+    filetypes=[("STEP files", "*.step *.stp"), ("All files", "*.*")],
+    initialfile="model.step",
+)
+root.destroy()
+
+if export_path:
     from build123d import Compound
-    export_step(Compound([handle, base_cut, extrude_solid2]), path_export)
-    print(f"All bodies exported to: {path_export}")
+
+    # ── STEP export ──────────────────────────────────────────────────────────
+    export_step(Compound([handle, base_cut, extrude_solid2]), export_path)
+    print(f"STEP exported to: {export_path}")
+
+    # ── STL export — same folder, same base name ─────────────────────────────
+    stl_path = os.path.splitext(export_path)[0] + ".stl"
+    export_stl(Compound([handle, base_cut, extrude_solid2]), stl_path)
+    print(f"STL  exported to: {stl_path}")
 else:
     print("Export cancelled.")
