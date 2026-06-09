@@ -11,7 +11,6 @@ Viewed interactively with ocp_vscode.
 from build123d import *
 from ocp_vscode import show, set_defaults
 
-# ── left semicircle: top-left → bottom-left ──────────────────────────────────
 _left = [
     (539834.9609, 234253.9648),(539829.1406, 234253.6328),(539823.3984, 234252.6172),
     (539817.8516, 234250.957), (539812.5,    234248.6523), (539807.4609, 234245.7422),
@@ -19,14 +18,13 @@ _left = [
     (539791.6406, 234228.9648),(539789.0234, 234223.7695),(539787.0312, 234218.3203),
     (539785.7031, 234212.6562),(539785.0391, 234206.875), (539785.0391, 234201.0742),
     (539785.7031, 234195.293), (539787.0312, 234189.6289),
-    (539789.0234, 234184.1602),(539791.6406, 234178.9648),  # ← fixed swap
+    (539789.0234, 234184.1602),(539791.6406, 234178.9648),
     (539794.8438, 234174.1211),(539798.5938, 234169.668),
     (539802.8125, 234165.6641),(539807.4609, 234162.207), (539812.5,    234159.2969),
     (539817.8516, 234156.9922),(539823.3984, 234155.3125),(539829.1406, 234154.3164),
     (539834.9609, 234153.9648),
 ]
 
-# ── right semicircle: top-right → bottom-right (reversed → bottom-right → top-right) ──
 _right_orig = [
     (541284.9609, 234253.9648),
     (541290.7422, 234253.6328),(541296.4844, 234252.6172),
@@ -41,11 +39,8 @@ _right_orig = [
     (541284.9609, 234153.9648),
 ]
 
-# Reverse right semicircle → goes bottom-right UP to top-right
-# Polyline close=True adds: top-right→top-left (top wall) and bottom-left→bottom-right (bottom wall)
 raw_points = _left + list(reversed(_right_orig))
 
-# ── normalise: shift centroid to origin ───────────────────────────────────────
 xs = [p[0] for p in raw_points]
 ys = [p[1] for p in raw_points]
 ox = (min(xs) + max(xs)) / 2
@@ -56,27 +51,18 @@ print(f"Extents       : {max(xs)-min(xs):.1f} × {max(ys)-min(ys):.1f} mm")
 
 pts_2d = [(x - ox, y - oy) for x, y in raw_points]
 
-# ── build solid ───────────────────────────────────────────────────────────────
 with BuildPart() as body:
     with BuildSketch(Plane(origin=(0, 0, 0), z_dir=(0, 0, 1))):
         with BuildLine():
             Polyline(*pts_2d, close=True)
         make_face()
-    extrude(amount=50.0, both=False)        # Z=0 → Z=50 mm
+    extrude(amount=50.0, both=False)
 
 solid = body.part
 print(f"Volume        : {solid.volume:,.1f} mm³")
 
-# ── display ───────────────────────────────────────────────────────────────────
 set_defaults(axes=True, axes0=True, grid=(True, True, True), transparent=False)
 show(solid, names=["Slot (Z=0→50)"], colors=["#4A90D9"])
-
-# ══════════════════════════════════════════════════════════════════════════════
-# BODY 2 – HOLE  (XZ-plane profile, extruded 120 mm in +Y direction)
-# All 24 pts share Y=234153.9648 — profile lies in the XZ plane.
-# Sketch placed on a plane at that Y, facing +Y, so extrude goes into the model.
-# Profile is a ~15×15 mm circular shape centred at X≈541084.96, Z≈25.
-# ══════════════════════════════════════════════════════════════════════════════
 
 _hole_raw = [
     (541088.7109, 18.5048),(541090.2344, 19.6967),(541091.4453, 21.25),
@@ -89,39 +75,28 @@ _hole_raw = [
     (541083.0078, 17.7556),(541084.9609, 17.5),   (541086.875,  17.7556),
 ]
 
-# Normalise: sketch X = -(x - ox), sketch Y = z (world Z maps correctly to +Z)
 _hole_pts = [(-(x - ox), z) for x, z in _hole_raw]
-
-# Plane at Y=234153.9648, facing +Y, with x_dir=(-1,0,0) so sketch Y = world +Z
 _hole_y = 234153.9648 - oy
 
 with BuildPart() as hole_body:
     with BuildSketch(Plane(
         origin=(0, _hole_y, 0),
-        z_dir=(0, 1, 0),     # sketch normal = +Y → extrude in +Y
-        x_dir=(-1, 0, 0),    # sketch X = world -X; sketch Y = world +Z
+        z_dir=(0, 1, 0),
+        x_dir=(-1, 0, 0),
     )):
         with BuildLine():
             Polyline(*_hole_pts, close=True)
         make_face()
-    extrude(amount=120.0, both=False)   # 120 mm in +Y direction
+    extrude(amount=120.0, both=False)
 
 hole_solid = hole_body.part
 
-# Replicate 9 more copies spaced 35 mm apart in -X direction
-# Total: 10 cylinders, each 35 mm apart
 _all_holes = hole_solid
 for i in range(1, 10):
     _copy = hole_solid.moved(Location((-i * 50, 0, 0)))
     _all_holes = _all_holes.fuse(_copy)
 
 print(f"All holes volume: {_all_holes.volume:,.1f} mm³")
-
-# ══════════════════════════════════════════════════════════════════════════════
-# BODY 3 – EXTRUDE  (XZ-plane profile, extruded 120 mm in +Y direction)
-# Same structure as hole body — Y=234153.9648 constant, profile in XZ plane.
-# Centred at X≈540034.96, Z≈25.
-# ══════════════════════════════════════════════════════════════════════════════
 
 _extrude2_raw = [
     (540031.2109, 31.4952),(540029.6484, 30.3033),(540028.4375, 28.75),
@@ -145,11 +120,10 @@ with BuildPart() as extrude2_body:
         with BuildLine():
             Polyline(*_extrude2_pts, close=True)
         make_face()
-    extrude(amount=120.0, both=False)   # 120 mm in +Y direction
+    extrude(amount=120.0, both=False)
 
 extrude2_solid = extrude2_body.part
 
-# Replicate 9 more copies spaced 50 mm apart in +X direction (center-to-center)
 _all_extrude2 = extrude2_solid
 for i in range(1, 10):
     _copy2 = extrude2_solid.moved(Location((i * 50, 0, 0)))
@@ -157,42 +131,22 @@ for i in range(1, 10):
 
 print(f"All extrude2 volume : {_all_extrude2.volume:,.1f} mm³")
 
-# Cut both red and green cylinders from blue slot body
 solid = solid.cut(_all_holes)
 print(f"After red cuts  : {solid.volume:,.1f} mm³")
 solid = solid.cut(_all_extrude2)
 print(f"After green cuts: {solid.volume:,.1f} mm³")
 
-# ══════════════════════════════════════════════════════════════════════════════
-# TEXT – 'TOP                                RIGHT' on bottom face (Z=0)
-# Font size 65, extruded +5mm in +Z direction (engraved into bottom face)
-# Shifted -167mm in X, mirrored about XZ plane for bottom readability
-# ══════════════════════════════════════════════════════════════════════════════
-
 with BuildPart() as text2_part:
     with BuildSketch(Plane(origin=(-285, 0, 0), z_dir=(0, 0, 1))):
         Text("TOP                          RIGHT", font_size=65, align=(Align.CENTER, Align.CENTER))
-    extrude(amount=5.0, both=False)         # Z=0 → Z=5 mm (+Z into body)
+    extrude(amount=5.0, both=False)
 
-# Mirror about XZ plane so text reads correctly from below
 text2_solid = mirror(text2_part.part, about=Plane(origin=(-285, 0, 0), z_dir=(0, 1, 0)))
-
-# Cut into bottom face in +Z direction
 solid = solid.cut(text2_solid)
 print(f"After top text  : {solid.volume:,.1f} mm³")
 
 set_defaults(axes=True, axes0=True, grid=(True, True, True), transparent=False)
-show(
-    solid,
-    names=["Slot (all cuts + text)"],
-    colors=["#4A90D9"],
-)
-
-# ══════════════════════════════════════════════════════════════════════════════
-# CHAMFER BODY – loft outer(Z=0, larger) → inner(Z=13.5, smaller)
-# Both profiles angle-sorted and resampled to 50 pts for clean ruled loft.
-# Separate body shown in orange.
-# ══════════════════════════════════════════════════════════════════════════════
+show(solid, names=["Slot (all cuts + text)"], colors=["#4A90D9"])
 
 import math as _mc2
 
@@ -233,7 +187,6 @@ _ch_outer_raw = [
     (539834.9609,234168.9648),(539830.0781,234169.3164),(539820.7031,234171.9922),
     (539825.3125,234170.332),(539816.4062,234174.2969),(539812.4609,234177.168),
 ]
-
 _ch_inner_raw = [
     (539853.8672,234214.1602),(539855.3906,234210.625),(539856.25,234206.8555),
     (539856.4062,234203.0078),(539855.8984,234199.1797),(539854.7266,234195.5273),
@@ -254,22 +207,18 @@ _ch_o = [(x - ox, y - oy) for x,y in _resamp(_sort_a(_ch_outer_raw), _N)]
 _ch_i = [(x - ox, y - oy) for x,y in _resamp(_sort_a(_ch_inner_raw), _N)]
 
 with BuildPart() as chamfer_part:
-    with BuildSketch(Plane(origin=(0, 0, 0), z_dir=(0, 0, 1))):    # outer at Z=0
+    with BuildSketch(Plane(origin=(0, 0, 0), z_dir=(0, 0, 1))):
         with BuildLine():
             Polyline(*_ch_o, close=True)
         make_face()
-    with BuildSketch(Plane(origin=(0, 0, 13.5), z_dir=(0, 0, 1))): # inner at Z=13.5
+    with BuildSketch(Plane(origin=(0, 0, 13.5), z_dir=(0, 0, 1))):
         with BuildLine():
             Polyline(*_ch_i, close=True)
         make_face()
-    loft(ruled=True)                                                 # linear taper
+    loft(ruled=True)
 
 chamfer_solid = chamfer_part.part
 print(f"Chamfer volume  : {chamfer_solid.volume:,.1f} mm³")
-
-# ══════════════════════════════════════════════════════════════════════════════
-# CHAMFER 2 – loft outer(Z=0, larger) → inner(Z=13.5, smaller), separate body
-# ══════════════════════════════════════════════════════════════════════════════
 
 _ch2_outer_raw = [
     (541258.9453,234227.3828),(541262.4609,234230.7812),(541266.4062,234233.6523),
@@ -288,7 +237,6 @@ _ch2_outer_raw = [
     (541287.3828,234169.0625),(541292.2266,234169.7461),(541282.5,234169.0625),
     (541277.6562,234169.7461),(541272.9688,234171.0742),(541268.5156,234173.0664),
 ]
-
 _ch2_inner_raw = [
     (541283.0078,234225.3906),(541286.875,234225.3906),(541290.6641,234224.707),
     (541294.2578,234223.3398),(541297.5781,234221.3672),(541300.4688,234218.8281),
@@ -321,40 +269,22 @@ with BuildPart() as chamfer2_part:
 chamfer2_solid = chamfer2_part.part
 print(f"Chamfer 2 volume: {chamfer2_solid.volume:,.1f} mm³")
 
-# Cut both chamfers from blue slot body in same +Z direction
 solid = solid.cut(chamfer_solid)
 print(f"After chamfer 1 cut : {solid.volume:,.1f} mm³")
 solid = solid.cut(chamfer2_solid)
 print(f"After chamfer 2 cut : {solid.volume:,.1f} mm³")
 
-# ══════════════════════════════════════════════════════════════════════════════
-# TEXT – 'TOP                                RIGHT' on bottom face (Z=0)
-# Font size 65, extruded +5mm in +Z direction (engraved into bottom face)
-# Shifted -167mm in X, mirrored about XZ plane for bottom readability
-# ══════════════════════════════════════════════════════════════════════════════
-
 with BuildPart() as text2_part:
     with BuildSketch(Plane(origin=(-285, 0, 0), z_dir=(0, 0, 1))):
         Text("TOP                          RIGHT", font_size=65, align=(Align.CENTER, Align.CENTER))
-    extrude(amount=5.0, both=False)         # Z=0 → Z=5 mm (+Z into body)
+    extrude(amount=5.0, both=False)
 
-# Mirror about XZ plane so text reads correctly from below
 text2_solid = mirror(text2_part.part, about=Plane(origin=(-285, 0, 0), z_dir=(0, 1, 0)))
-
-# Cut into bottom face in +Z direction
 solid = solid.cut(text2_solid)
 print(f"After top text  : {solid.volume:,.1f} mm³")
 
 set_defaults(axes=True, axes0=True, grid=(True, True, True), transparent=False)
-show(
-    solid,
-    names=["Slot (all cuts + text)"],
-    colors=["#4A90D9"],
-)
-
-# ══════════════════════════════════════════════════════════════════════════════
-# HOLE CYLINDER – XY plane profile at Z=50, angle-sorted, separate body
-# ══════════════════════════════════════════════════════════════════════════════
+show(solid, names=["Slot (all cuts + text)"], colors=["#4A90D9"])
 
 _hole2_raw = [
     (539832.3047,234245.2344),(539827.0312,234244.5508),(539821.9141,234243.2227),
@@ -383,14 +313,10 @@ with BuildPart() as hole2_part:
         with BuildLine():
             Polyline(*_hole2_pts, close=True)
         make_face()
-    extrude(amount=-35.0, both=False)       # Z=50 → Z=15 mm (-Z direction)
+    extrude(amount=-35.0, both=False)
 
 hole2_solid = hole2_part.part
 print(f"Hole2 volume    : {hole2_solid.volume:,.1f} mm³")
-
-# ══════════════════════════════════════════════════════════════════════════════
-# EXTRUDE CYLINDER 2 – XY plane profile at Z=50, extruded 35mm in -Z direction
-# ══════════════════════════════════════════════════════════════════════════════
 
 _extrude_cyl2_raw = [
     (541297.9688,234164.7266),(541302.8906,234166.7188),(541307.5,234169.3164),
@@ -419,88 +345,55 @@ with BuildPart() as extrude_cyl2_part:
         with BuildLine():
             Polyline(*_extrude_cyl2_pts, close=True)
         make_face()
-    extrude(amount=-35.0, both=False)       # Z=50 → Z=15 mm (-Z direction)
+    extrude(amount=-35.0, both=False)
 
 extrude_cyl2_solid = extrude_cyl2_part.part
 
-# Cut red and green from blue in same -Z direction
 solid = solid.cut(hole2_solid)
 print(f"After red cut   : {solid.volume:,.1f} mm³")
 solid = solid.cut(extrude_cyl2_solid)
 print(f"After green cut : {solid.volume:,.1f} mm³")
 
-# ══════════════════════════════════════════════════════════════════════════════
-# TEXT – 'TOP                                RIGHT' on bottom face (Z=0)
-# Font size 65, extruded +5mm in +Z direction (engraved into bottom face)
-# Shifted -167mm in X, mirrored about XZ plane for bottom readability
-# ══════════════════════════════════════════════════════════════════════════════
-
 with BuildPart() as text2_part:
     with BuildSketch(Plane(origin=(-285, 0, 0), z_dir=(0, 0, 1))):
         Text("TOP                          RIGHT", font_size=65, align=(Align.CENTER, Align.CENTER))
-    extrude(amount=5.0, both=False)         # Z=0 → Z=5 mm (+Z into body)
+    extrude(amount=5.0, both=False)
 
-# Mirror about XZ plane so text reads correctly from below
 text2_solid = mirror(text2_part.part, about=Plane(origin=(-285, 0, 0), z_dir=(0, 1, 0)))
-
-# Cut into bottom face in +Z direction
 solid = solid.cut(text2_solid)
 print(f"After top text  : {solid.volume:,.1f} mm³")
 
 set_defaults(axes=True, axes0=True, grid=(True, True, True), transparent=False)
-show(
-    solid,
-    names=["Slot (all cuts + text)"],
-    colors=["#4A90D9"],
-)
-
-# ══════════════════════════════════════════════════════════════════════════════
-# TEXT – 'BOTTOM' on top face (Z=50), font size 50, separate body
-# Extruded 2mm upward (+Z) as raised lettering
-# ══════════════════════════════════════════════════════════════════════════════
+show(solid, names=["Slot (all cuts + text)"], colors=["#4A90D9"])
 
 with BuildPart() as text_part:
     with BuildSketch(Plane(origin=(-167, 0, 50), z_dir=(0, 0, 1))):
         Text("BOTTOM", font_size=65, align=(Align.CENTER, Align.CENTER))
-    extrude(amount=-5.0, both=False)        # Z=50 → Z=45 mm (-Z direction)
+    extrude(amount=-5.0, both=False)
 
 text_solid = text_part.part
-
-# Cut BOTTOM text into top face in -Z direction, 5mm deep (Z=50→45)
 solid = solid.cut(text_solid)
 print(f"After text cut  : {solid.volume:,.1f} mm³")
-
-# ══════════════════════════════════════════════════════════════════════════════
-# TEXT – 'TOP                                RIGHT' on bottom face (Z=0)
-# Font size 65, extruded +5mm in +Z direction (engraved into bottom face)
-# Shifted -167mm in X, mirrored about XZ plane for bottom readability
-# ══════════════════════════════════════════════════════════════════════════════
 
 with BuildPart() as text2_part:
     with BuildSketch(Plane(origin=(-285, 0, 0), z_dir=(0, 0, 1))):
         Text("TOP                          RIGHT", font_size=65, align=(Align.CENTER, Align.CENTER))
-    extrude(amount=5.0, both=False)         # Z=0 → Z=5 mm (+Z into body)
+    extrude(amount=5.0, both=False)
 
-# Mirror about XZ plane so text reads correctly from below
 text2_solid = mirror(text2_part.part, about=Plane(origin=(-285, 0, 0), z_dir=(0, 1, 0)))
-
-# Cut into bottom face in +Z direction
 solid = solid.cut(text2_solid)
 print(f"After top text  : {solid.volume:,.1f} mm³")
 
 set_defaults(axes=True, axes0=True, grid=(True, True, True), transparent=False)
-show(
-    solid,
-    names=["Slot (all cuts + text)"],
-    colors=["#4A90D9"],
-)
+show(solid, names=["Slot (all cuts + text)"], colors=["#4A90D9"])
 
 # ══════════════════════════════════════════════════════════════════════════════
-# EXPORT — STEP file with pop-up file dialog for save location
+# STEP + STL Export — pop-up dialog
 # ══════════════════════════════════════════════════════════════════════════════
 
 import tkinter as tk
 from tkinter import filedialog
+import os
 
 _root = tk.Tk()
 _root.withdraw()
@@ -515,7 +408,13 @@ _export_path = filedialog.asksaveasfilename(
 _root.destroy()
 
 if _export_path:
+    # ── STEP export ──────────────────────────────────────────────────────────
     export_step(solid, _export_path)
-    print(f"Model exported to: {_export_path}")
+    print(f"STEP exported to: {_export_path}")
+
+    # ── STL export — same folder, same base name ─────────────────────────────
+    _stl_path = os.path.splitext(_export_path)[0] + ".stl"
+    export_stl(solid, _stl_path)
+    print(f"STL  exported to: {_stl_path}")
 else:
     print("Export cancelled.")
