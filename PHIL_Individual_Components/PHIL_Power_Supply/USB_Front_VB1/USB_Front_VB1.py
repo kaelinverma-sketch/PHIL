@@ -9,6 +9,8 @@ mirrored on the opposite side in Y, shown in OCP CAD Viewer.
 Requires: pip install build123d ocp-vscode numpy
 """
 
+import math
+import os
 import numpy as np
 from build123d import *
 from ocp_vscode import show
@@ -115,12 +117,10 @@ cx_in,  cy_in,  r_inner = fit_circle(inner_pts)
 avg_cx = (cx_big + cx_out) / 2
 avg_cy = (cy_big + cy_out) / 2
 
-# Y midpoint of the rectangular face — mirror axis
 rect_y_min = -210.5469
 rect_y_max =  214.4531
-mirror_y   = (rect_y_min + rect_y_max) / 2   # ≈ 1.953
+mirror_y   = (rect_y_min + rect_y_max) / 2
 
-# Mirrored Y centres (reflect about mirror_y)
 avg_cy_mir = 2 * mirror_y - avg_cy
 cy_in_mir  = 2 * mirror_y - cy_in
 
@@ -133,11 +133,11 @@ print(f"Hole mirrored centre Y:    {cy_in_mir:.3f}")
 
 EXTRUDE_HEIGHT = 30
 CHAMFER_HEIGHT = 20
-Z_TOP          = EXTRUDE_HEIGHT  # 30
+Z_TOP          = EXTRUDE_HEIGHT
 
 HOLE_Z_START = -10
 HOLE_Z_END   =  40
-HOLE_HEIGHT  = HOLE_Z_END - HOLE_Z_START  # 50 mm
+HOLE_HEIGHT  = HOLE_Z_END - HOLE_Z_START
 
 # ── 1. BASE BODY ──────────────────────────────────────────────────────────────
 with BuildPart() as base_part:
@@ -149,7 +149,7 @@ with BuildPart() as base_part:
 
 base_solid = base_part.part
 
-# ── Helper: build chamfer loft tool at a given (cx, cy) ──────────────────────
+# ── Helper: build chamfer loft tool ──────────────────────────────────────────
 def make_chamfer_tool(cx, cy):
     with BuildPart() as cp:
         with BuildSketch(Plane.XY):
@@ -159,7 +159,7 @@ def make_chamfer_tool(cx, cy):
         loft()
     return cp.part.moved(Location((cx, cy, Z_TOP)))
 
-# ── Helper: build cylindrical hole tool at a given (cx, cy) ──────────────────
+# ── Helper: build cylindrical hole tool ──────────────────────────────────────
 def make_hole_tool(cx, cy):
     with BuildPart() as hp:
         with BuildSketch(Plane(origin=(cx, cy, HOLE_Z_START), z_dir=(0, 0, 1))):
@@ -171,11 +171,11 @@ def make_hole_tool(cx, cy):
 chamfer_tool_orig = make_chamfer_tool(avg_cx, avg_cy)
 hole_tool_orig    = make_hole_tool(cx_in, cy_in)
 
-# ── 3. Mirrored chamfer + hole (reflected in Y about rect centre) ─────────────
+# ── 3. Mirrored chamfer + hole ────────────────────────────────────────────────
 chamfer_tool_mir  = make_chamfer_tool(avg_cx, avg_cy_mir)
 hole_tool_mir     = make_hole_tool(cx_in, cy_in_mir)
 
-# ── 4. CUT PROFILE (Cut.txt) — extrude cut Z=-10 → Z=50 ─────────────────────
+# ── 4. CUT PROFILE ───────────────────────────────────────────────────────────
 cut_profile_pts = [
     (92.538,  24.4531), (22.4219, 24.4531), (20.4688, 24.375),
     (18.5156, 24.1211), (16.6016, 23.6914), (14.7266, 23.1055),
@@ -194,7 +194,7 @@ cut_profile_pts = [
 
 CUT_Z_START = -10
 CUT_Z_END   =  50
-CUT_HEIGHT  = CUT_Z_END - CUT_Z_START  # 60 mm
+CUT_HEIGHT  = CUT_Z_END - CUT_Z_START
 
 cut_plane = Plane(origin=(0, 0, CUT_Z_START), z_dir=(0, 0, 1))
 
@@ -207,35 +207,31 @@ with BuildPart() as cut_tool_part:
 
 cut_tool = cut_tool_part.part
 
-# ── 5. Apply chamfer + hole cuts (before fillets) ────────────────────────────
+# ── 5. Apply chamfer + hole cuts ──────────────────────────────────────────────
 cut_body = (base_solid
             - chamfer_tool_orig
             - hole_tool_orig
             - chamfer_tool_mir
             - hole_tool_mir)
 
-# ── 6. Fillet the 4 vertical corner edges (along Z axis) ─────────────────────
-FILLET_R = 20  # mm
+# ── 6. Fillet corner + top edges ─────────────────────────────────────────────
+FILLET_R = 20
 
-# Rebuild in BuildPart context so we can use fillet()
 with BuildPart() as filleted_part:
     add(cut_body)
-    # Select the 4 vertical edges at the rect corners (parallel to Z axis)
     corner_edges = (
         filleted_part.edges()
-        .filter_by(Axis.Z)          # keep only edges parallel to Z
-        .filter_by(lambda e:        # keep only the 4 straight corner edges
+        .filter_by(Axis.Z)
+        .filter_by(lambda e:
             e.geom_type == GeomType.LINE and
             abs(e.length - EXTRUDE_HEIGHT) < 0.1
         )
     )
     fillet(corner_edges, radius=FILLET_R)
 
-    # Fillet only the outer rectangular perimeter edges at Z=30
-    # Exclude: circular arcs (chamfer), cut profile edges (not on outer rect boundary)
     rect_x_min, rect_x_max = -40.0781, 84.9219
     rect_y_min2, rect_y_max2 = -210.5469, 214.4531
-    tol = 1.0  # mm tolerance for boundary check
+    tol = 1.0
 
     def on_outer_rect(e):
         if e.geom_type != GeomType.LINE:
@@ -244,7 +240,6 @@ with BuildPart() as filleted_part:
             return False
         cx = e.center().X
         cy = e.center().Y
-        # Must lie on one of the 4 outer rect sides
         on_left   = abs(cx - rect_x_min) < tol
         on_right  = abs(cx - rect_x_max) < tol
         on_bottom = abs(cy - rect_y_min2) < tol
@@ -271,10 +266,32 @@ print(f"Original  hole    @ ({cx_in:.2f},  {cy_in:.2f})")
 print(f"Mirrored  hole    @ ({cx_in:.2f},  {cy_in_mir:.2f})")
 print(f"Corner fillets: r={FILLET_R} mm on 4 vertical edges")
 
-# ── 9. Export to STEP on Desktop ──────────────────────────────────────────────
-import os
-desktop = os.path.join(os.path.expanduser("~"), "Desktop")
-step_path = os.path.join(desktop, "USB_Front.step")
-export_step(final_body, step_path)
-print(f"STEP exported → {step_path}")
+# ── 9. STEP + STL Export — pop-up dialog ─────────────────────────────────────
+import tkinter as tk
+from tkinter import filedialog
+
+root = tk.Tk()
+root.withdraw()
+root.attributes("-topmost", True)
+
+export_path = filedialog.asksaveasfilename(
+    title="Save STEP file",
+    defaultextension=".step",
+    filetypes=[("STEP files", "*.step *.stp"), ("All files", "*.*")],
+    initialfile="USB_Front.step",
+)
+root.destroy()
+
+if export_path:
+    # ── STEP export ──────────────────────────────────────────────────────────
+    export_step(final_body, export_path)
+    print(f"STEP exported to: {export_path}")
+
+    # ── STL export — same folder, same base name ─────────────────────────────
+    stl_path = os.path.splitext(export_path)[0] + ".stl"
+    export_stl(final_body, stl_path)
+    print(f"STL  exported to: {stl_path}")
+else:
+    print("Export cancelled.")
+
 print("Done.")
