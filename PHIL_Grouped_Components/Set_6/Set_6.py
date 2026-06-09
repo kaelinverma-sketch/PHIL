@@ -14,6 +14,8 @@ Power Box – Left + Back + Right + Front + Bottom Plates (1 fused body)
 
 import json
 import os
+import tkinter as tk
+from tkinter import filedialog
 from build123d import *
 from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeFace
 from ocp_vscode import show_object, show, reset_show
@@ -763,8 +765,7 @@ power_box = power_box.cut(chamfer_2)
 
 
 
-# ── Back-face chamfer lofts: Outer.txt (y=0, big dia) → inner.txt (y=8.55, small dia) ──
-# Two separate bodies, one per circle (x≈365 and x≈865). NOT fused into power_box.
+# ── Back-face chamfer lofts ───────────────────────────────────────────────────
 import math as _math13
 
 
@@ -826,28 +827,22 @@ _back_inner_all = [
 ]
 
 
-_BACK_CHAMFER_H = 8.55  # mm, extrude in +Y
+_BACK_CHAMFER_H = 8.55
 
 
 def _make_back_chamfer(outer_pts, inner_pts, cx, cz, label):
-   """Loft outer ring (y=0, big dia) → inner ring (y=8.55, small dia) in +Y."""
-   # Sort both rings by angle around their centre
    o_s = sorted(outer_pts, key=lambda p: _math13.atan2(p[2]-cz, p[0]-cx))
    i_s = sorted(inner_pts, key=lambda p: _math13.atan2(p[2]-cz, p[0]-cx))
-   # Shift inner ring to y=8.55
    i_shifted = [(p[0], _BACK_CHAMFER_H, p[2]) for p in i_s]
-
 
    def _w(pts):
        edges = [Edge.make_line(Vector(*pts[j]), Vector(*pts[(j+1)%len(pts)]))
                 for j in range(len(pts))]
        return Wire(Wire._make_wire(edges))
 
-
    return Solid.make_loft([_w(o_s), _w(i_shifted)], ruled=False)
 
 
-# Split by x < 600 → circle at x=365, x >= 600 → circle at x=865
 _bo1 = [p for p in _back_outer_all if p[0] < 600]
 _bo2 = [p for p in _back_outer_all if p[0] >= 600]
 _bi1 = [p for p in _back_inner_all if p[0] < 600]
@@ -858,28 +853,24 @@ back_chamfer_1 = _make_back_chamfer(_bo1, _bi1, 365.0, 523.24, "Back Chamfer 1 (
 back_chamfer_2 = _make_back_chamfer(_bo2, _bi2, 865.0, 523.24, "Back Chamfer 2 (x=865)")
 
 
-# Cut both chamfer bodies from the power box
 power_box = power_box.cut(back_chamfer_1)
 if not isinstance(power_box, Solid): power_box = power_box.solids()[0]
 power_box = power_box.cut(back_chamfer_2)
 if not isinstance(power_box, Solid): power_box = power_box.solids()[0]
 
 
-
-
 try:
-   # ── Text: rotated 90° CW, runs in -Z, lines stack in X, left-aligned ───────────
+   # ── Text ──────────────────────────────────────────────────────────────────
    _font_h       = 100
    _txt_depth    = 3
    _line_spacing = 25
    _x_centre     = 621.25
-   _y_face       = 3.0   # moved 3mm in +Y
-   _z_start      = 362.5 + 1183.7   # moved 1183.7mm in +Z
+   _y_face       = 3.0
+   _z_start      = 362.5 + 1183.7
    _total_h      = 3 * _font_h + 2 * _line_spacing
    _x_top = _x_centre + _total_h / 2 - _font_h / 2
    _x_mid = _x_centre
    _x_bot = _x_centre - _total_h / 2 + _font_h / 2
-
 
    _text_lines = [
        ("Designed by Phillip Dettinger", _x_top),
@@ -887,12 +878,11 @@ try:
        ("ETH Zurich",                    _x_bot),
    ]
 
-
    _txt_tools = []
    for _txt, _x_pos in _text_lines:
        _plane = Plane(origin=Vector(_x_pos, _y_face, _z_start),
-                      x_dir=Vector(0, 0, -1),   # text runs in -Z (90° CW from +X)
-                      z_dir=Vector(0, -1, 0))   # normal = -Y (outward)
+                      x_dir=Vector(0, 0, -1),
+                      z_dir=Vector(0, -1, 0))
        with BuildSketch(_plane) as _sk:
            Text(_txt, font_size=_font_h, align=(Align.MIN, Align.CENTER))
        _txt_tools.append(extrude(_sk.sketch, amount=_txt_depth))
@@ -901,20 +891,34 @@ try:
    if not isinstance(power_box, Solid): power_box = power_box.solids()[0]
    power_box = power_box.clean()
 
-
-   # ── Export STEP file to Desktop ───────────────────────────────────────────────
-   import os as _os
-   _desktop = _os.path.join(_os.path.expanduser("~"), "Desktop")
-   _step_path = _os.path.join(_desktop, "Power Box.step")
-   export_step(power_box, _step_path)
-   print(f"STEP exported: {_step_path}")
-
-
-   # ── Display ───────────────────────────────────────────────────────────────────
+   # ── Display ───────────────────────────────────────────────────────────────
    show_object(power_box, name="Power Box", options={"color": "#5b8fa8", "alpha": 1.0})
 
+   # ── STEP + STL Export — pop-up file dialog ────────────────────────────────
+   _root = tk.Tk()
+   _root.withdraw()
+   _root.attributes("-topmost", True)
+
+   _export_path = filedialog.asksaveasfilename(
+       title="Save Power Box STEP file",
+       defaultextension=".step",
+       filetypes=[("STEP files", "*.step *.stp"), ("All files", "*.*")],
+       initialfile="Power Box.step",
+   )
+   _root.destroy()
+
+   if _export_path:
+       # ── STEP export ───────────────────────────────────────────────────────
+       export_step(power_box, _export_path)
+       print(f"STEP exported: {_export_path}")
+
+       # ── STL export — same folder, same base name ──────────────────────────
+       _stl_path = os.path.splitext(_export_path)[0] + ".stl"
+       export_stl(power_box, _stl_path)
+       print(f"STL  exported: {_stl_path}")
+   else:
+       print("Export cancelled.")
 
    print("Success")
 except Exception as e:
    print(f"Failure: {e}")
-   
