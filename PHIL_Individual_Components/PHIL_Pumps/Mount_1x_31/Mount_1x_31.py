@@ -1,5 +1,6 @@
 from build123d import *
 from ocp_vscode import show
+import os
 
 # --- DATA POINTS ---
 
@@ -86,25 +87,13 @@ loft_profile2 = [(76.2988, 148.0), (73.9795, 145.8354), (72.29, 143.1845), (71.1
 rect_profile1 = [(-116.4941, 140.0), (-132.0264, 140.0), (-132.0264, 215.0), (-116.4941, 215.0)]
 rect_profile2 = [(-91.8311, 142.0), (-91.8311, 206.2614), (-76.3037, 206.2614), (-76.3037, 142.0)]
 
-# --- EXTRUDE PROFILE ---
-
 extrude_points = [
-    (124.2868, -210.0),
-    (257.5, -210.0),
-    (252.2949, -209.5459),
-    (247.2363, -208.1934),
-    (242.5, -205.9814),
-    (238.2129, -202.9834),
-    (234.5215, -199.2871),
-    (231.5234, -195.0),
-    (229.3066, -190.2637),
-    (227.959, -185.21),
-    (227.5, -180.0),
-    (227.5, -175.1172),
+    (124.2868, -210.0), (257.5, -210.0), (252.2949, -209.5459), (247.2363, -208.1934),
+    (242.5, -205.9814), (238.2129, -202.9834), (234.5215, -199.2871), (231.5234, -195.0),
+    (229.3066, -190.2637), (227.959, -185.21), (227.5, -180.0), (227.5, -175.1172),
     (124.2868, -175.1172),
 ]
 
-# --- CUT PROFILE (XZ PLANE AT Y=-210) ---
 cut_xz_points = [
     (382.5, 33.625), (382.959, 38.8344), (384.3066, 43.8856), (386.5234, 48.625),
     (389.5215, 52.9086), (393.2129, 56.6063), (397.5, 59.6058), (402.2363, 61.8158),
@@ -112,7 +101,6 @@ cut_xz_points = [
     (378.6507, 74.9793), (378.9402, 33.6001),
 ]
 
-# --- NEW EXTRACTED FILE COORDINATES (BASELINE Z = -25.0) ---
 new_body_profile = [
     (608.75, -210.0), (608.75, -198.2715), (608.3105, -194.0869), (606.9922, -190.083),
     (604.873, -186.4453), (602.041, -183.3301), (598.623, -180.8789), (594.7559, -179.1992),
@@ -137,7 +125,6 @@ new_body_profile = [
     (416.8066, -209.5947), (422.5, -210.0)
 ]
 
-# --- LOFT BODY PROFILES ---
 loft_body_profile1 = [
     (-77.3975, 205.625), (-77.3975, 200.625), (-81.2305, 200.4805), (-85.0244, 200.0485),
     (-88.75, 199.3332), (-92.3584, 198.3414), (-95.8301, 197.0826), (-99.1211, 195.5691),
@@ -190,15 +177,12 @@ with BuildPart() as rect_loft_pos:
     add(rect_loft_neg.part)
     mirror(about=Plane.XZ)
 
-# --- EXTRUDE SOLID (PRE-BUILT) ---
-
 with BuildPart() as extrude_solid:
     with BuildSketch(Plane.XY.offset(120.625)):
         with BuildLine(): Polyline(*extrude_points, close=True)
         make_face()
     extrude(amount=100)
 
-# --- LOFT BODY (SEPARATE) ---
 with BuildPart() as loft_body:
     with BuildSketch(Plane.YZ.offset(227.5)):
         with BuildLine(): Polyline(*loft_body_profile1, close=True)
@@ -208,12 +192,10 @@ with BuildPart() as loft_body:
         make_face()
     loft()
 
-# --- LOFT BODY MIRRORED (POSITIVE Y SIDE) ---
 with BuildPart() as loft_body_mirror:
     add(loft_body.part)
     mirror(about=Plane.XZ)
 
-# --- EXTRUDE CUT LOFT BODIES (PRE-BUILT FOR SUBTRACTION) ---
 with BuildPart() as loft_body_cut:
     add(loft_body.part)
     with BuildSketch(Plane.XY.offset(120.625)):
@@ -228,21 +210,15 @@ with BuildPart() as loft_body_mirror_cut:
         make_face()
     extrude(amount=100, mode=Mode.SUBTRACT)
 
-
-
-# --- CHAMFER LOFT BODY ---
 with BuildPart() as chamfer_body:
-    # Inner circle at Z=-5 (small dia, radius=25mm, center=(-315, 100))
     with BuildSketch(Plane.XY.offset(-5)):
         with Locations((-315, 100)):
             Circle(radius=25)
-    # Outer circle at Z=25 (big dia, radius=50mm, center=(-308.8, 100))
     with BuildSketch(Plane.XY.offset(25)):
         with Locations((-308.8, 100)):
             Circle(radius=50)
     loft()
 
-# --- CHAMFER LOFT BODY MIRRORED (NEGATIVE Y SIDE) ---
 with BuildPart() as chamfer_body_mirror:
     add(chamfer_body.part)
     mirror(about=Plane.XZ)
@@ -255,24 +231,18 @@ with BuildPart() as body1:
         make_face()
     extrude(amount=210, both=True)
 
-    # OUTER CORNER FILLETS (50mm)
     outer_edges = body1.edges().filter_by(Axis.Z).sort_by(lambda e: abs(e.center().X))[4:]
     fillet(outer_edges, radius=50)
 
-    # VERTICAL STEP FILLETS (40mm)
     v_step_edges = body1.edges().filter_by(Axis.Z).sort_by(lambda e: abs(e.center().X - (-225)) + abs(abs(e.center().Y) - 210))[:2]
     fillet(v_step_edges, radius=40)
 
-    # CHAMFER LOFT CUT (applied early on clean geometry)
     add(chamfer_body.part, mode=Mode.SUBTRACT)
     add(chamfer_body_mirror.part, mode=Mode.SUBTRACT)
 
-    # TOP FACE FILLET (30mm)
-    # Applied before subtractions to ensure smooth geometry blending without cut intersections
     top_face = body1.faces().sort_by(Axis.Z)[-1]
     fillet(top_face.edges(), radius=30)
 
-    # Subtractions
     with BuildSketch(Plane.XY.offset(48)):
         with BuildLine(): Polyline(*points2, close=True)
         make_face()
@@ -302,43 +272,28 @@ with BuildPart() as body1:
 
     add(loft_pos.part, mode=Mode.SUBTRACT)
     add(loft_neg.part, mode=Mode.SUBTRACT)
-
-
     add(rect_loft_neg.part, mode=Mode.SUBTRACT)
     add(rect_loft_pos.part, mode=Mode.SUBTRACT)
 
-    # RECT LOFT CUT EDGE FILLETS
-    # Select edges near rect loft X range (-132 to -76) and Z range (140 to 215)
-
-
-    # HORIZONTAL STEP FILLET (40mm)
     target_edge_h = min(
         body1.edges().filter_by(Axis.Y),
         key=lambda e: (e.center().X - (-225))**2 + (e.center().Z - 25)**2
     )
     fillet(target_edge_h, radius=40)
 
-    # ADD PRE-BUILT EXTRUDE SOLID
     add(extrude_solid.part)
-
-    # CUT LOFT BODIES FROM body1
     add(loft_body_cut.part, mode=Mode.SUBTRACT)
     add(loft_body_mirror_cut.part, mode=Mode.SUBTRACT)
 
-
-
-    # EXTRUDE CUT FROM extrude_points PROFILE AT Z=120.625, 100mm UPWARD
     with BuildSketch(Plane.XY.offset(120.625)):
         with BuildLine(): Polyline(*extrude_points, close=True)
         make_face()
     extrude(amount=100, mode=Mode.SUBTRACT)
 
-    # MIRRORED EXTRUDE CUT ON POSITIVE Y SIDE
     with BuildSketch(Plane.XY.offset(120.625)):
         with BuildLine(): Polyline(*[(x, -y) for x, y in extrude_points], close=True)
         make_face()
     extrude(amount=100, mode=Mode.SUBTRACT)
-
 
 
 inner_neg = [
@@ -364,7 +319,7 @@ inner_pos = [
     (449.6875, 169.7314), (446.1133, 168.5693), (442.9395, 166.5576),
     (440.3613, 163.8135),
 ]
-# --- OUTER PROFILE BODY (PRE-BUILT) ---
+
 with BuildPart() as outer_body:
     with BuildSketch(Plane.XY.offset(-0.625)):
         for outer in [outer_pos, outer_neg]:
@@ -372,23 +327,13 @@ with BuildPart() as outer_body:
             make_face()
     extrude(amount=65)
 
-
-# --- NEW SEPARATE BODY BASE (PRE-BUILT WITH FILLET) ---
 with BuildPart() as new_separate_body_base:
     with BuildSketch(Plane.XY.offset(-25.0)):
         with BuildLine():
             Polyline(*new_body_profile, close=True)
         make_face()
     extrude(amount=88.63)
-    # TOP FACE FILLET (30mm) on clean geometry before cuts
     top_z_s2 = max(e.center().Z for e in new_separate_body_base.edges())
-    top_x_edges_s2 = new_separate_body_base.edges().filter_by_position(
-        Axis.Z, minimum=top_z_s2 - 1, maximum=top_z_s2 + 1
-    ).filter_by(Axis.X)
-    top_y_edges_s2 = new_separate_body_base.edges().filter_by_position(
-        Axis.Z, minimum=top_z_s2 - 1, maximum=top_z_s2 + 1
-    ).filter_by(Axis.Y)
-    # Fillet only the two straight edges at Y=-210 and Y=210 on top face
     top_long_edges_s2 = [
         e for e in new_separate_body_base.edges().filter_by_position(
             Axis.Z, minimum=top_z_s2 - 1, maximum=top_z_s2 + 1
@@ -396,39 +341,51 @@ with BuildPart() as new_separate_body_base:
     ]
     fillet(top_long_edges_s2, radius=30)
 
-
-# --- NEW SEPARATE BODY CONSTRUCTION ---
 with BuildPart() as new_separate_body:
     add(new_separate_body_base.part)
 
-    # CUT PROFILE AT Y=-210, EXTRUDING 500mm IN +Y DIRECTION
     with BuildSketch(Plane.XZ.offset(-210)):
         with BuildLine(): Polyline(*cut_xz_points, close=True)
         make_face()
     extrude(amount=500, mode=Mode.SUBTRACT)
 
-    # CUT OUTER CYLINDERS FROM new_separate_body
     add(outer_body.part, mode=Mode.SUBTRACT)
 
-    # CUT INNER CIRCLES FROM new_separate_body IN BOTH DIRECTIONS 50mm
-    # Circles: center=(452.5, -155.0) and (452.5, 155.0), radius=15mm
     with BuildSketch(Plane.XY.offset(-0.625)):
         with Locations((452.5, -155.0), (452.5, 155.0)):
             Circle(radius=15)
     extrude(amount=50, both=True, mode=Mode.SUBTRACT)
 
 
-# Render all bodies
 show(body1, new_separate_body)
 
-# Export all bodies to STEP format on Desktop
-from build123d import Compound
-import os
-
-desktop = os.path.expanduser('~/Desktop')
-export_path = os.path.join(desktop, 'Mount.step')
-
+# ── STEP + STL Export — pop-up dialog ────────────────────────────────────────
+import tkinter as tk
+from tkinter import filedialog
 from build123d import export_step, Compound
-assembly = Compound(children=[body1.part, new_separate_body.part])
-export_step(assembly, export_path)
-print(f"Exported assembly to: {export_path}")
+
+root = tk.Tk()
+root.withdraw()
+root.attributes("-topmost", True)
+
+export_path = filedialog.asksaveasfilename(
+    title="Save STEP file",
+    defaultextension=".step",
+    filetypes=[("STEP files", "*.step *.stp"), ("All files", "*.*")],
+    initialfile="Mount.step",
+)
+root.destroy()
+
+if export_path:
+    assembly = Compound(children=[body1.part, new_separate_body.part])
+
+    # ── STEP export ──────────────────────────────────────────────────────────
+    export_step(assembly, export_path)
+    print(f"STEP exported to: {export_path}")
+
+    # ── STL export — same folder, same base name ─────────────────────────────
+    stl_path = os.path.splitext(export_path)[0] + ".stl"
+    export_stl(assembly, stl_path)
+    print(f"STL  exported to: {stl_path}")
+else:
+    print("Export cancelled.")
