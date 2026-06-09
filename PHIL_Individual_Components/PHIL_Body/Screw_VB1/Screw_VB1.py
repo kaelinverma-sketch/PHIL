@@ -20,17 +20,11 @@ dz_flank   = (PITCH - flat_root - flat_crest) / 2   # 42.465 mm
 ROOT_RADIUS  = CREST_RADIUS - h_tooth   # 143.45mm
 HELIX_RADIUS = CREST_RADIUS             # 168mm
 
-
-# ── Exact profile from reference STEP file (5 vertices) ──────────────────────
-# Vertices in XZ plane: X = radial offset from crest (0=crest, negative=inward)
-# Z = axial, centred on root flat midpoint
-# Crest radius = 167.1875mm, Root radius = 142.6392mm, Tooth depth = 24.5483mm
-
-V4 = (  0.0000,   3.7966)   # crest top
-V0 = (  0.0000,  -3.1574)   # crest bottom       crest flat = 6.9540mm
-V1 = ( -8.5547,  -6.9363)   # lower flank knee
-V8 = (-24.5483, -14.0613)   # root bottom         root flat = 28.1226mm
-V6 = (-24.5483,  14.0613)   # root top
+V4 = (  0.0000,   3.7966)
+V0 = (  0.0000,  -3.1574)
+V1 = ( -8.5547,  -6.9363)
+V8 = (-24.5483, -14.0613)
+V6 = (-24.5483,  14.0613)
 
 with BuildSketch(Plane.XZ) as sk:
     with BuildLine():
@@ -44,7 +38,6 @@ with BuildSketch(Plane.XZ) as sk:
         )
     make_face()
 
-# Shift so crest (X=0) sits exactly at HELIX_RADIUS
 profile_face = sk.face().moved(Location((HELIX_RADIUS, 0, 0)))
 profile_face = profile_face.rotate(Axis.X, 90)
 
@@ -82,7 +75,6 @@ bot_cut = bot_cut.moved(Location((0, 0, 0)))
 
 core_body = core_body - top_cut - bot_cut
 
-# Revolve profile
 with BuildPart() as revolve_part:
     with BuildSketch(Plane.XZ) as rsk:
         with BuildLine():
@@ -100,27 +92,18 @@ revolve_top = revolve_part.part.moved(Location((0, 0, 388.5)))
 mirror_plane = Plane((0, 0, 171.5), (1, 0, 0), (0, 0, 1))
 revolve_bot  = mirror(revolve_top, about=mirror_plane)
 
-# Cut both revolve solids into the body
 core_body = core_body - revolve_top - revolve_bot
 
 set_defaults(axes=True, axes0=True, grid=(True, True, True))
 
-
-
-
-
-
-# ── Loft body: extrude_2 (small) → extrude (large) ───────────────────────────
 import math
 
 def sort_by_angle(pts):
-    """Sort points by angle around their YZ centroid for correct spline winding."""
     cy = sum(p[1] for p in pts) / len(pts)
     cz = sum(p[2] for p in pts) / len(pts)
     return sorted(pts, key=lambda p: math.atan2(p[2] - cz, p[1] - cy))
 
 def make_smooth_wire(pts):
-    """Closed smooth periodic spline wire through 3D points."""
     vecs = [Vector(p) for p in sort_by_angle(pts)]
     e = Edge.make_spline(vecs, periodic=True)
     return Wire([e])
@@ -161,15 +144,10 @@ extrude_pts = [
     (-174.6484,-12.6099,-239.9735),(-174.6484,-6.4302,-238.7946),
 ]
 
-w1 = make_smooth_wire(extrude2_pts)   # small profile  (X=-99)
-w2 = make_smooth_wire(extrude_pts)    # large profile  (X=-174)
-
+w1 = make_smooth_wire(extrude2_pts)
+w2 = make_smooth_wire(extrude_pts)
 loft_body = Solid.make_loft([w1, w2]).moved(Location((0, 0, 388.5)))
 
-set_defaults(axes=True, axes0=True, grid=(True, True, True))
-
-
-# ── Loft body 2: extrude_2 (large, X=-99) → extrude/inner (small, X=-82) ─────
 extrude2_pts_b = [
     (-99.6484,-0.1514,-258.4958),(-99.6484,4.5418,-258.8651),(-99.6484,9.1193,-259.9641),
     (-99.6484,13.4686,-261.7657),(-99.6484,17.4825,-264.2254),(-99.6484,21.0623,-267.2828),
@@ -203,10 +181,8 @@ inner_pts_b = [
 
 w1b = make_smooth_wire(extrude2_pts_b)
 w2b = make_smooth_wire(inner_pts_b)
-
 loft_body2 = Solid.make_loft([w1b, w2b]).moved(Location((0, 0, 388.5)))
 
-# ── Loft body 3: extrude_2 (X=-82) → extrude (X=-17) ────────────────────────
 extrude2_pts_c = [
     (-82.9684,-0.1514,-271.0651),(-82.9684,-3.2639,-271.3452),(-82.9684,-6.2763,-272.1766),
     (-82.9684,-9.0919,-273.5325),(-82.9684,-11.6201,-275.3694),(-82.9684,-13.7797,-277.6281),
@@ -243,21 +219,16 @@ loft_body3 = Solid.make_loft([w1c, w2c]).moved(Location((0, 0, 388.5)))
 set_defaults(axes=True, axes0=True, grid=(True, True, True))
 body = core_body + threads
 
-# Extrude cut: 400mm dia x 600mm from Z=343 going +Z
 top_cut2 = Cylinder(radius=400 / 2, height=600,
                     align=(Align.CENTER, Align.CENTER, Align.MIN))
 top_cut2 = top_cut2.moved(Location((0, 0, 343)))
 body = body - top_cut2
 
-# Extrude cut: 400mm dia x 600mm from Z=0 going -Z
 bot_cut2 = Cylinder(radius=400 / 2, height=600,
                     align=(Align.CENTER, Align.CENTER, Align.MAX))
 bot_cut2 = bot_cut2.moved(Location((0, 0, 0)))
 body = body - bot_cut2
 
-# ── Chamfer revolve cut ───────────────────────────────────────────────────────
-# Triangle profile (YZ plane, X=0): revolve around Z axis
-# P0: R=168.0051, Z=-25.0   P1: R=129.9732, Z=-25.0   P2: R=168.0051, Z=-62.8597
 with BuildPart() as chamfer_part:
     with BuildSketch(Plane.XZ) as csk:
         with BuildLine():
@@ -274,11 +245,8 @@ chamfer_solid = chamfer_part.part.moved(Location((0, 0, 388.5)))
 chamfer_mirror = mirror(chamfer_solid, about=Plane((0, 0, 171.5), (1, 0, 0), (0, 0, 1)))
 body = body - chamfer_solid - chamfer_mirror
 
-# Cut all loft bodies into main body
 body = body - loft_body - loft_body2 - loft_body3
 
-# ── Extrude from Cut.txt profile (XY plane) at top of model (Z=343) ──────────
-# 6-point polygon, extruded 85mm in +Z
 import math as _math
 
 cut_pts_xy = [
@@ -301,7 +269,6 @@ with BuildSketch(Plane.XY) as cut_sk:
 cut_solid = extrude(cut_sk.face(), amount=85).moved(Location((0, 0, 343 - 85 + 45.5)))
 body = body - cut_solid
 
-# ── New extrude from Cut.txt (circular profile) Z=0 to Z=350 ─────────────────
 cut2_pts_xy = [
     (-19.4922,-17.168),(-17.7734,-18.9844),(-15.8984,-20.625),(-13.8281,-22.0703),
     (-11.6797,-23.3203),(-9.375,-24.375),(-7.0312,-25.1953),(-4.5703,-25.7812),
@@ -323,10 +290,9 @@ with BuildSketch(Plane.XY) as cut2_sk:
         Polyline(*cut2_pts_xy, close=True)
     make_face()
 
-cut2_solid = extrude(cut2_sk.face(), amount=350)  # Z=0 to Z=350, at origin
+cut2_solid = extrude(cut2_sk.face(), amount=350)
 body = body - cut2_solid
 
-# ── Extrude from Cut.txt (YZ profile at X=-49.6484) 25mm in +X ───────────────
 cut3_pts_3d = [
     (-49.6484, 33.0469, -288.5),
     (-49.6484, 16.4453, -259.75),
@@ -341,7 +307,6 @@ cut3_face = Face(cut3_wire)
 cut3_solid = Solid.extrude(cut3_face, direction=Vector(25, 0, 0)).moved(Location((-25, 0, 388.5)))
 body = body - cut3_solid
 
-# ── Extrude cut from Cut.txt (XY circular profile ~⌀52mm) 20mm in +Z from Z=0 ─
 cut4_pts_xy = [
     (-19.8047,-16.8359),(-21.3281,-14.8047),(-22.6562,-12.6562),(-23.75,-10.3906),
     (-24.6484,-8.0078),(-25.3125,-5.5664),(-25.7031,-3.0859),(-25.8984,-0.5469),
@@ -362,16 +327,14 @@ cut4_pts_xy = [
     (-17.7734,-18.9844),(-19.8047,-17.168),(-19.4922,-17.168),
 ]
 
-# Profile in XY plane at Z=0, extruded 20mm in +Z
 with BuildSketch(Plane.XY) as cut4_sk:
     with BuildLine():
         Polyline(*cut4_pts_xy, close=True)
     make_face()
 
-cut4_solid = extrude(cut4_sk.face(), amount=20)   # Z=0 to Z=20
+cut4_solid = extrude(cut4_sk.face(), amount=20)
 body = body - cut4_solid
 
-# ── Extrude from large circular profile (~⌀170mm) 45.5mm in +Z from Z=343 ───
 cut5_pts_xy = [
     (-68.5547,47.2656),(-71.0156,43.3984),(-73.2422,39.4336),(-75.2734,35.332),
     (-77.1094,31.1328),(-78.6719,26.8359),(-80.0,22.4609),(-81.1328,18.0273),
@@ -411,7 +374,6 @@ with BuildSketch(Plane.XY) as cut5_sk:
 
 cut5_solid = extrude(cut5_sk.face(), amount=45.5).moved(Location((0, 0, 343)))
 
-# ── Hexagonal extrude cut 50mm in +Z from Z=343 ──────────────────────────────
 cut6_pts_xy = [
     (-15.9766, -30.1172),
     (18.6328, -30.1172),
@@ -432,7 +394,6 @@ body = body - cut6_solid
 cut5_solid = cut5_solid - cut6_solid
 body = body - cut6_solid
 
-# ── Fillet 11mm on hexagon cut edges at Z=343 (on cut5_solid) ────────────────
 hex_fillet_edges = [
     e for e in cut5_solid.edges()
     if abs(e.center().Z - 388.5) < 1.0
@@ -446,19 +407,15 @@ body = body + cut5_solid
 
 show(body, names=["Body"])
 
-# ── 3 separate blade bodies, Z=0 to Z=350 ────────────────────────────────────
-# Body 1: top blade   (P0-P10)
 blade1_pts = [
     (-103.4265,149.8189),(-87.5,122.1875),(-84.4531,124.3359),(-81.3672,126.3867),
     (-78.2031,128.3984),(-74.9609,130.3125),(-71.6797,132.1484),(-68.3203,133.9062),
     (-64.9609,135.6055),(-61.5234,137.1875),(-77.4183,164.7697),
 ]
-# Body 2: right blade (P11-P19)
 blade2_pts = [
     (150.0846,15.0),(150.2734,13.3008),(150.6641,7.2852),(150.8594,1.2695),
     (150.7812,-4.7461),(150.4688,-10.7617),(150.0822,-15.0),(173.1875,-15.0),(172.9922,15.0),
 ]
-# Body 3: bottom blade (P20-P30)
 blade3_pts = [
     (-98.5633,-141.2978),(-72.6054,-156.3534),(-61.5234,-137.1875),(-64.9609,-135.5859),
     (-68.3203,-133.9062),(-71.6797,-132.1289),(-74.9609,-130.293),(-78.2031,-128.3789),
@@ -475,9 +432,34 @@ for pts in [blade1_pts, blade2_pts, blade3_pts]:
 
 body = body - blade_solids[0] - blade_solids[1] - blade_solids[2]
 
-# Export to STEP
-export_step(body, "/Users/softage/Desktop/master_screw.step")
-print("STEP exported to Desktop: master_screw.step")
-
 set_defaults(axes=True, axes0=True, grid=(True, True, True))
 show(body, names=["Body"])
+
+# ── STEP + STL Export — pop-up dialog ────────────────────────────────────────
+import tkinter as tk
+from tkinter import filedialog
+import os
+
+root = tk.Tk()
+root.withdraw()
+root.attributes("-topmost", True)
+
+export_path = filedialog.asksaveasfilename(
+    title="Save STEP file",
+    defaultextension=".step",
+    filetypes=[("STEP files", "*.step *.stp"), ("All files", "*.*")],
+    initialfile="master_screw.step",
+)
+root.destroy()
+
+if export_path:
+    # ── STEP export ──────────────────────────────────────────────────────────
+    export_step(body, export_path)
+    print(f"STEP exported to: {export_path}")
+
+    # ── STL export — same folder, same base name ─────────────────────────────
+    stl_path = os.path.splitext(export_path)[0] + ".stl"
+    export_stl(body, stl_path)
+    print(f"STL  exported to: {stl_path}")
+else:
+    print("Export cancelled.")
